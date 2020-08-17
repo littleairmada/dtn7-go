@@ -1,9 +1,14 @@
+// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/dtn7/cboring"
 	"github.com/hashicorp/go-multierror"
@@ -27,11 +32,14 @@ func NewBundle(primary PrimaryBlock, canonicals []CanonicalBlock) (b Bundle, err
 
 // MustNewBundle creates a new Bundle like NewBundle, but skips the validity
 // check. No panic will be called!
-func MustNewBundle(primary PrimaryBlock, canonicals []CanonicalBlock) Bundle {
-	return Bundle{
+func MustNewBundle(primary PrimaryBlock, canonicals []CanonicalBlock) (b Bundle) {
+	b = Bundle{
 		PrimaryBlock:    primary,
 		CanonicalBlocks: canonicals,
 	}
+	b.sortBlocks()
+
+	return
 }
 
 // ParseBundle reads a new CBOR encoded Bundle from a Reader.
@@ -73,6 +81,13 @@ func (b *Bundle) PayloadBlock() (*CanonicalBlock, error) {
 	return b.ExtensionBlock(ExtBlockTypePayloadBlock)
 }
 
+// sortBlocks sorts the canonical blocks.
+//
+// This method is called internally after block modification, e.g., in MustNewBundle or Bundle.AddExtensionBlock.
+func (b *Bundle) sortBlocks() {
+	sort.Sort(canonicalBlockNumberSort(b.CanonicalBlocks))
+}
+
 // AddExtensionBlock adds a new ExtensionBlock to this Bundle. The block number
 // will be calculated and overwritten within this method.
 func (b *Bundle) AddExtensionBlock(block CanonicalBlock) {
@@ -82,6 +97,10 @@ func (b *Bundle) AddExtensionBlock(block CanonicalBlock) {
 	}
 
 	var blockNumber uint64 = 1
+	if block.Value.BlockTypeCode() != ExtBlockTypePayloadBlock {
+		blockNumber = 2
+	}
+
 	for {
 		flag := true
 		for _, no := range blockNumbers {
@@ -99,7 +118,9 @@ func (b *Bundle) AddExtensionBlock(block CanonicalBlock) {
 	}
 
 	block.BlockNumber = blockNumber
+
 	b.CanonicalBlocks = append(b.CanonicalBlocks, block)
+	b.sortBlocks()
 }
 
 // SetCRCType sets the given CRCType for each block. To also calculate and set
@@ -170,6 +191,13 @@ func (b Bundle) CheckValid() (errs error) {
 		cbBlockTypes[blockType] = true
 	}
 
+	// Check if the PayloadBlock is the last block.
+	if last := b.CanonicalBlocks[len(b.CanonicalBlocks)-1].Value.BlockTypeCode(); last != ExtBlockTypePayloadBlock {
+		errs = multierror.Append(errs,
+			fmt.Errorf("Bundle: last CannonicalBlock is not a Payload Block, but %d", last))
+	}
+
+	// Check existence of a Bundle Age Block if the CreationTimestamp is zero.
 	if b.PrimaryBlock.CreationTimestamp.IsZeroTime() {
 		if _, err := b.ExtensionBlock(ExtBlockTypeBundleAgeBlock); err != nil {
 			errs = multierror.Append(errs, fmt.Errorf(
@@ -177,6 +205,7 @@ func (b Bundle) CheckValid() (errs error) {
 		}
 	}
 
+	// Check if Bundle Age Block's time is exceeded.
 	if canBab, err := b.ExtensionBlock(ExtBlockTypeBundleAgeBlock); err == nil {
 		bundleAge := canBab.Value.(*BundleAgeBlock).Age()
 		if bundleAge > b.PrimaryBlock.Lifetime {

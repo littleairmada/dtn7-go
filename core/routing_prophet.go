@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2019 Markus Sommer
+// SPDX-FileCopyrightText: 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package core
 
 import (
@@ -66,7 +71,7 @@ func NewProphet(c *Core, config ProphetConfig) *Prophet {
 
 	// register our custom metadata-block
 	extensionBlockManager := bundle.GetExtensionBlockManager()
-	if !extensionBlockManager.IsKnown(ExtBlockTypeProphetBlock) {
+	if !extensionBlockManager.IsKnown(bundle.ExtBlockTypeProphetBlock) {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
 		_ = extensionBlockManager.Register(newProphetBlock(prophet.predictabilities))
 	}
@@ -162,7 +167,7 @@ func (prophet *Prophet) sendMetadata(destination bundle.EndpointID) {
 }
 
 func (prophet *Prophet) NotifyIncoming(bp BundlePack) {
-	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
+	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bundle.ExtBlockTypeProphetBlock); err == nil {
 		log.WithFields(log.Fields{
 			"source": bp.MustBundle().PrimaryBlock.SourceNode,
 		}).Debug("Received metadata")
@@ -273,7 +278,7 @@ func (prophet *Prophet) SenderForBundle(bp BundlePack) (sender []cla.Convergence
 		return
 	}
 
-	if _, err := bndl.ExtensionBlock(ExtBlockTypeProphetBlock); err == nil {
+	if _, err := bndl.ExtensionBlock(bundle.ExtBlockTypeProphetBlock); err == nil {
 		// we do not forward metadata bundles
 		// if the intended recipient is connected the bundle will be forwarded via direct delivery
 		// since we shouldn't have any metadata bundle meant for other nodes, we will also delete these bundles
@@ -452,11 +457,9 @@ func (prophet *Prophet) ReportPeerDisappeared(peer cla.Convergence) {
 	// there really isn't anything to do upon a peer's disappearance
 }
 
+// ProphetBlock contains routing metadata
+//
 // TODO: Turn this into an administrative record
-
-const ExtBlockTypeProphetBlock uint64 = 194
-
-// DTLSRBlock contains routing metadata
 type ProphetBlock map[bundle.EndpointID]float64
 
 func newProphetBlock(data map[bundle.EndpointID]float64) *ProphetBlock {
@@ -469,7 +472,7 @@ func (pBlock *ProphetBlock) getPredictabilities() map[bundle.EndpointID]float64 
 }
 
 func (pBlock *ProphetBlock) BlockTypeCode() uint64 {
-	return ExtBlockTypeProphetBlock
+	return bundle.ExtBlockTypeProphetBlock
 }
 
 func (pBlock ProphetBlock) CheckValid() error {

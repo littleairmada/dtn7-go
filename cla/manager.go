@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2020 Markus Sommer
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package cla
 
 import (
@@ -23,6 +28,8 @@ type Manager struct {
 	// convs maps each CLA's address to a wrapped convergenceElem struct.
 	// convs: Map[string]*convergenceElem
 	convs *sync.Map
+
+	listenerIDs map[CLAType][]bundle.EndpointID
 
 	// providers is an array of ConvergenceProvider. Those will report their
 	// created Convergence objects to this Manager, which also supervises it.
@@ -52,6 +59,8 @@ func NewManager() *Manager {
 		retryTime: 10 * time.Second,
 
 		convs: new(sync.Map),
+
+		listenerIDs: make(map[CLAType][]bundle.EndpointID),
 
 		inChnl:  make(chan ConvergenceStatus, 100),
 		outChnl: make(chan ConvergenceStatus),
@@ -307,4 +316,38 @@ func (manager *Manager) Receiver() (crs []ConvergenceReceiver) {
 		return true
 	})
 	return
+}
+
+func (manager *Manager) RegisterEndpointID(claType CLAType, eid bundle.EndpointID) {
+	clas, ok := manager.listenerIDs[claType]
+
+	if ok {
+		clas = append(clas, eid)
+	} else {
+		clas = []bundle.EndpointID{eid}
+	}
+
+	manager.listenerIDs[claType] = clas
+}
+
+// EndpointIDs returns the EndpointIDs of all registered CLAs of the specified type.
+// Returns an empty slice if no CLAs of the tye exist.
+func (manager *Manager) EndpointIDs(claType CLAType) []bundle.EndpointID {
+	if clas, ok := manager.listenerIDs[claType]; ok {
+		return clas
+	} else {
+		return make([]bundle.EndpointID, 0)
+	}
+}
+
+func (manager *Manager) HasEndpoint(endpoint bundle.EndpointID) bool {
+	for _, clas := range manager.listenerIDs {
+		for _, adapter := range clas {
+			if adapter.Authority() == endpoint.Authority() {
+				return true
+			}
+		}
+	}
+
+	return false
 }

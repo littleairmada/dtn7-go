@@ -1,7 +1,8 @@
-package bundle
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-// ExtBlockTypePayloadBlock is the block type code for a Payload Block.
-const ExtBlockTypePayloadBlock uint64 = 1
+package bundle
 
 // PayloadBlock implements the Bundle Protocol's Payload Block.
 type PayloadBlock []byte

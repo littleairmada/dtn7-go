@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2019 Markus Sommer
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package core
 
 import (
@@ -11,10 +16,33 @@ import (
 
 // SendBundle transmits an outbounding bundle.
 func (c *Core) SendBundle(bndl *bundle.Bundle) {
+	if c.signPriv != nil && bndl.IsAdministrativeRecord() {
+		c.sendBundleAttachSignature(bndl)
+	}
 	bp := NewBundlePackFromBundle(*bndl, c.store)
 
 	c.routing.NotifyIncoming(bp)
 	c.transmit(bp)
+}
+
+// sendBundleAttachSignature attaches a SignatureBlock to outgoing Administrative Records, if configured.
+func (c *Core) sendBundleAttachSignature(bndl *bundle.Bundle) {
+	if c.signPriv == nil || !bndl.IsAdministrativeRecord() {
+		return
+	}
+
+	sb, sbErr := bundle.NewSignatureBlock(*bndl, c.signPriv)
+	if sbErr != nil {
+		log.WithField("bundle", bndl.ID()).WithError(sbErr).Error("Creating signature errored, proceeding without")
+		return
+	}
+
+	cb := bundle.NewCanonicalBlock(0, bundle.ReplicateBlock|bundle.DeleteBundle, sb)
+	cb.SetCRCType(bundle.CRC32)
+
+	bndl.AddExtensionBlock(cb)
+
+	log.WithField("bundle", bndl.ID()).Info("Attached signature to outgoing bundle")
 }
 
 // transmit starts the transmission of an outbounding bundle pack. Therefore

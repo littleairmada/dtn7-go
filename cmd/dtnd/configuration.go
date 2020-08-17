@@ -1,6 +1,13 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2019, 2020 Markus Sommer
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package main
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,6 +44,7 @@ type coreConf struct {
 	Store             string
 	InspectAllBundles bool   `toml:"inspect-all-bundles"`
 	NodeId            string `toml:"node-id"`
+	SignPriv          string `toml:"signature-private"`
 }
 
 // logConf describes the Logging-configuration block.
@@ -84,44 +92,63 @@ func parseListenPort(endpoint string) (port int, err error) {
 }
 
 // parseListen inspects a "listen" convergenceConf and returns a Convergable.
-func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergable, discovery.DiscoveryMessage, error) {
+func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergable, bundle.EndpointID, cla.CLAType, discovery.DiscoveryMessage, error) {
+	log.WithFields(log.Fields{
+		"EndpointID": conv.Node,
+		"Endpoint":   conv.Endpoint,
+		"Protocol":   conv.Protocol,
+	}).Debug("Initialising convergence adaptor")
+
+	// if the user has configured an EndpointID for this convergence adaptor
+	if conv.Node != "" {
+		parsedId, err := bundle.NewEndpointID(conv.Node)
+		if err != nil {
+			return nil, nodeId, 0, discovery.DiscoveryMessage{}, err
+		} else {
+			log.WithFields(log.Fields{
+				"listener ID": conv.Node,
+			}).Debug("Using alternative configured endpoint id for listener")
+			nodeId = parsedId
+		}
+	}
+
 	switch conv.Protocol {
 	case "bbc":
 		conn, err := bbc.NewBundleBroadcastingConnector(conv.Endpoint, true)
-		return conn, discovery.DiscoveryMessage{}, err
+		return conn, nodeId, cla.BBC, discovery.DiscoveryMessage{}, err
 
 	case "mtcp":
 		portInt, err := parseListenPort(conv.Endpoint)
 		if err != nil {
-			return nil, discovery.DiscoveryMessage{}, err
+			return nil, nodeId, cla.MTCP, discovery.DiscoveryMessage{}, err
 		}
 
 		msg := discovery.DiscoveryMessage{
-			Type:     discovery.MTCP,
+			Type:     cla.MTCP,
 			Endpoint: nodeId,
 			Port:     uint(portInt),
 		}
 
-		return mtcp.NewMTCPServer(conv.Endpoint, nodeId, true), msg, nil
+		return mtcp.NewMTCPServer(conv.Endpoint, nodeId, true), nodeId, cla.MTCP, msg, nil
 
 	case "tcpcl":
 		portInt, err := parseListenPort(conv.Endpoint)
 		if err != nil {
-			return nil, discovery.DiscoveryMessage{}, err
+			return nil, nodeId, cla.TCPCL, discovery.DiscoveryMessage{}, err
 		}
 
 		listener := tcpcl.NewListener(conv.Endpoint, nodeId)
 
 		msg := discovery.DiscoveryMessage{
-			Type:     discovery.TCPCL,
+			Type:     cla.TCPCL,
 			Endpoint: nodeId,
 			Port:     uint(portInt),
 		}
 
-		return listener, msg, nil
+		return listener, nodeId, cla.TCPCL, msg, nil
 
 	default:
-		return nil, discovery.DiscoveryMessage{}, fmt.Errorf("unknown listen.protocol \"%s\"", conv.Protocol)
+		return nil, nodeId, 0, discovery.DiscoveryMessage{}, fmt.Errorf("unknown listen.protocol \"%s\"", conv.Protocol)
 	}
 }
 
@@ -243,8 +270,14 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 		return
 	}
 
-	c, err = core.NewCore(conf.Core.Store, nodeId, conf.Core.InspectAllBundles, conf.Routing)
-	if err != nil {
+	var signPriv ed25519.PrivateKey = nil
+	if conf.Core.SignPriv != "" {
+		if signPriv, err = hex.DecodeString(conf.Core.SignPriv); err != nil {
+			return
+		}
+	}
+
+	if c, err = core.NewCore(conf.Core.Store, nodeId, conf.Core.InspectAllBundles, conf.Routing, signPriv); err != nil {
 		return
 	}
 
@@ -262,11 +295,11 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 
 	// Listen/ConvergenceReceiver
 	for _, conv := range conf.Listen {
-		if convRec, discoMsg, lErr := parseListen(conv, c.NodeId); lErr != nil {
+		if convRec, eid, claType, discoMsg, lErr := parseListen(conv, c.NodeId); lErr != nil {
 			err = lErr
 			return
 		} else {
-			c.RegisterConvergable(convRec)
+			c.RegisterCLA(convRec, claType, eid)
 			if discoMsg != (discovery.DiscoveryMessage{}) {
 				discoveryMsgs = append(discoveryMsgs, discoMsg)
 			}

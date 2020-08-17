@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -27,6 +31,9 @@ type EndpointType interface {
 
 	// Path is the path part of the Endpoint URI, e.g., "/bar" for "dtn://foo/bar".
 	Path() string
+
+	// IsSingleton checks if this Endpoint represents a singleton.
+	IsSingleton() bool
 
 	// MarshalCbor is the marshalling CBOR function from the cboring library.
 	MarshalCbor(io.Writer) error
@@ -171,11 +178,26 @@ func (eid EndpointID) Path() string {
 	return eid.EndpointType.Path()
 }
 
+// IsSingleton checks if this Endpoint represents a singleton.
+func (eid EndpointID) IsSingleton() bool {
+	return eid.EndpointType.IsSingleton()
+}
+
+// SameNode checks if two Endpoints contain to the same Node, based on the scheme and authority part.
+func (eid EndpointID) SameNode(other EndpointID) bool {
+	return eid.EndpointType.SchemeName() == other.EndpointType.SchemeName() &&
+		eid.EndpointType.Authority() == other.EndpointType.Authority()
+}
+
 // CheckValid returns an array of errors for incorrect data.
 func (eid EndpointID) CheckValid() error {
 	return eid.EndpointType.CheckValid()
 }
 
 func (eid EndpointID) String() string {
-	return eid.EndpointType.String()
+	if eid.EndpointType == nil {
+		return DtnNone().String()
+	} else {
+		return eid.EndpointType.String()
+	}
 }

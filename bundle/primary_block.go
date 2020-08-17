@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -31,11 +35,8 @@ type PrimaryBlock struct {
 }
 
 // NewPrimaryBlock creates a new primary block with the given parameters. All
-// other fields are set to default values. The lifetime is taken in
-// microseconds.
-func NewPrimaryBlock(bundleControlFlags BundleControlFlags,
-	destination EndpointID, sourceNode EndpointID,
-	creationTimestamp CreationTimestamp, lifetime uint64) PrimaryBlock {
+// other fields are set to default values. The lifetime is passed in milliseconds.
+func NewPrimaryBlock(bundleControlFlags BundleControlFlags, destination EndpointID, sourceNode EndpointID, creationTimestamp CreationTimestamp, lifetime uint64) PrimaryBlock {
 	pb := PrimaryBlock{
 		Version:            dtnVersion,
 		BundleControlFlags: bundleControlFlags,
@@ -139,7 +140,7 @@ func (pb *PrimaryBlock) MarshalCbor(w io.Writer) error {
 		return crcErr
 	} else if err := cboring.WriteByteString(crcVal, w); err != nil {
 		return err
-	} else if pb.CRC == nil {
+	} else if !bytes.Equal(pb.CRC, crcVal) {
 		pb.CRC = crcVal
 	}
 
@@ -308,8 +309,7 @@ func (pb PrimaryBlock) IsLifetimeExceeded() bool {
 	}
 
 	currentTs := time.Now()
-	supremumTs := pb.CreationTimestamp.DtnTime().Time().Add(
-		time.Duration(pb.Lifetime) * time.Microsecond)
+	supremumTs := pb.CreationTimestamp.DtnTime().Time().Add(time.Duration(pb.Lifetime) * time.Millisecond)
 
 	return currentTs.After(supremumTs)
 }

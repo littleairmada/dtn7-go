@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -5,9 +9,6 @@ import (
 
 	"github.com/dtn7/cboring"
 )
-
-// ExtBlockTypePreviousNodeBlock is the block type code for a Previous Node Block.
-const ExtBlockTypePreviousNodeBlock uint64 = 6
 
 // PreviousNodeBlock implements the Bundle Protocol's Previous Node Block.
 type PreviousNodeBlock EndpointID

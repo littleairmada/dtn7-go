@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2020 Markus Sommer
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package discovery
 
 import (
@@ -52,23 +57,35 @@ func (ds *DiscoveryService) handleDiscovery(dm DiscoveryMessage, addr string) {
 		"message":   dm,
 	}).Debug("Peer discovery received a message")
 
-	if dm.Endpoint == ds.c.NodeId {
+	if ds.c.HasEndpoint(dm.Endpoint) {
 		log.WithFields(log.Fields{
 			"discovery": ds,
 			"peer":      addr,
 			"message":   dm,
-		}).Debug("Peer discovery is from this node, dropping")
-
+		}).Debug("Discovery message for one of our own ids, dropping")
 		return
 	}
 
 	var client cla.Convergence
 	switch dm.Type {
-	case MTCP:
-		client = mtcp.NewMTCPClient(fmt.Sprintf("%s:%d", addr, dm.Port), dm.Endpoint, false)
+	case cla.MTCP:
+		if len(ds.c.RegisteredCLAs(cla.MTCP)) > 0 {
+			client = mtcp.NewMTCPClient(fmt.Sprintf("%s:%d", addr, dm.Port), dm.Endpoint, false)
+			ds.c.RegisterConvergable(client)
+		} else {
+			log.Debug("Peer requested MTCP, but we don't run any such CLA")
+		}
 
-	case TCPCL:
-		client = tcpcl.DialClient(fmt.Sprintf("%s:%d", addr, dm.Port), ds.c.NodeId, false)
+	case cla.TCPCL:
+		clas := ds.c.RegisteredCLAs(cla.TCPCL)
+		if len(clas) > 0 {
+			for _, eid := range clas {
+				client = tcpcl.DialClient(fmt.Sprintf("%s:%d", addr, dm.Port), eid, false)
+				ds.c.RegisterConvergable(client)
+			}
+		} else {
+			log.Debug("Peer requested TCPCL, but we don't run any such CLA")
+		}
 
 	default:
 		log.WithFields(log.Fields{
@@ -78,8 +95,6 @@ func (ds *DiscoveryService) handleDiscovery(dm DiscoveryMessage, addr string) {
 		}).Warn("DiscoveryMessage's Type is unknown or unsupported")
 		return
 	}
-
-	ds.c.RegisterConvergable(client)
 }
 
 // Close shuts the DiscoveryService down.

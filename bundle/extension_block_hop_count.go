@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -6,9 +10,6 @@ import (
 
 	"github.com/dtn7/cboring"
 )
-
-// ExtBlockTypeHopCountBlock is the block type code for a Hop Count Block.
-const ExtBlockTypeHopCountBlock uint64 = 10
 
 // HopCountBlock implements the Bundle Protocol's Hop Count Block.
 type HopCountBlock struct {

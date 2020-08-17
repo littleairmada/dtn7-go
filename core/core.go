@@ -1,7 +1,14 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2019, 2020 Markus Sommer
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package core
 
 import (
+	"crypto/ed25519"
 	"encoding/gob"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -23,6 +30,7 @@ type Core struct {
 	claManager   *cla.Manager
 	idKeeper     IdKeeper
 	routing      RoutingAlgorithm
+	signPriv     ed25519.PrivateKey
 
 	store *storage.Store
 
@@ -30,24 +38,31 @@ type Core struct {
 	stopAck chan struct{}
 }
 
-// NewCore creates and returns a new Core. A SimpleStore will be created or used
-// at the given path. The inspectAllBundles flag indicates if all
-// administrative records - next to the bundles addressed to this node - should
-// be inspected. This allows bundle deletion for forwarding bundles.
-func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool, routingConf RoutingConf) (*Core, error) {
+// NewCore will be created according to the parameters.
+//
+// 	storePath: path for the bundle and metadata storage
+// 	nodeId: singleton Endpoint ID/Node ID
+// 	inspectAllBundles: inspect all administrative records, not only those addressed to this node
+// 	routingConf: selected routing algorithm and its configuration
+// 	signPriv: optional ed25519 private key (64 bytes long) to sign all outgoing bundles; or nil to not use this feature
+func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool, routingConf RoutingConf, signPriv ed25519.PrivateKey) (*Core, error) {
 	var c = new(Core)
 
 	gob.Register([]bundle.EndpointID{})
 	gob.Register(bundle.EndpointID{})
+	gob.Register(map[cla.CLAType][]bundle.EndpointID{})
 	gob.Register(bundle.DtnEndpoint{})
 	gob.Register(bundle.IpnEndpoint{})
 	gob.Register(map[Constraint]bool{})
 	gob.Register(time.Time{})
 
-	c.cron = NewCron()
-
+	if !nodeId.IsSingleton() {
+		return nil, fmt.Errorf("passed Node ID MUST be a singleton; %s is not", nodeId)
+	}
 	c.InspectAllBundles = inspectAllBundles
 	c.NodeId = nodeId
+
+	c.cron = NewCron()
 
 	if store, err := storage.NewStore(storePath); err != nil {
 		return nil, err
@@ -61,21 +76,21 @@ func NewCore(storePath string, nodeId bundle.EndpointID, inspectAllBundles bool,
 
 	c.idKeeper = NewIdKeeper()
 
-	switch routingConf.Algorithm {
-	case "epidemic":
-		c.routing = NewEpidemicRouting(c)
-	case "spray":
-		c.routing = NewSprayAndWait(c, routingConf.SprayConf)
-	case "binary_spray":
-		c.routing = NewBinarySpray(c, routingConf.SprayConf)
-	case "dtlsr":
-		c.routing = NewDTLSR(c, routingConf.DTLSRConf)
-	case "prophet":
-		c.routing = NewProphet(c, routingConf.ProphetConf)
-	default:
-		log.WithFields(log.Fields{
-			"routing_string": routingConf.Algorithm,
-		}).Fatal("Unknown routing algorithm")
+	if ra, raErr := routingConf.RoutingAlgorithm(c); raErr != nil {
+		return nil, raErr
+	} else {
+		c.routing = ra
+	}
+
+	if signPriv != nil {
+		if l := len(signPriv); l != ed25519.PrivateKeySize {
+			return nil, fmt.Errorf("ed25519 private key's length is %d, not %d", l, ed25519.PrivateKeySize)
+		}
+		c.signPriv = signPriv
+
+		if err := bundle.GetExtensionBlockManager().Register(&bundle.SignatureBlock{}); err != nil {
+			return nil, fmt.Errorf("SignatureBlock registration errored: %v", err)
+		}
 	}
 
 	c.stopSyn = make(chan struct{})
@@ -183,7 +198,7 @@ func (c *Core) RegisterApplicationAgent(app agent.ApplicationAgent) {
 // PrimaryBlock's destination to the assigned endpoint ID of each CLA.
 func (c *Core) senderForDestination(endpoint bundle.EndpointID) (css []cla.ConvergenceSender) {
 	for _, cs := range c.claManager.Sender() {
-		if cs.GetPeerEndpointID() == endpoint {
+		if cs.GetPeerEndpointID().SameNode(endpoint) {
 			css = append(css, cs)
 		}
 	}
@@ -193,7 +208,7 @@ func (c *Core) senderForDestination(endpoint bundle.EndpointID) (css []cla.Conve
 // HasEndpoint checks if the given endpoint ID is assigned either to an
 // application or a CLA governed by this Application Agent.
 func (c *Core) HasEndpoint(endpoint bundle.EndpointID) bool {
-	if c.NodeId.Authority() == endpoint.Authority() {
+	if c.NodeId.SameNode(endpoint) {
 		return true
 	}
 
@@ -201,8 +216,12 @@ func (c *Core) HasEndpoint(endpoint bundle.EndpointID) bool {
 		return true
 	}
 
+	if c.claManager.HasEndpoint(endpoint) {
+		return true
+	}
+
 	for _, cr := range c.claManager.Receiver() {
-		if cr.GetEndpointID() == endpoint {
+		if cr.GetEndpointID().SameNode(endpoint) {
 			return true
 		}
 	}
@@ -279,4 +298,17 @@ func (c *Core) SendStatusReport(bp BundlePack, status bundle.StatusInformationPo
 // RegisterConvergable is the exposed Register method from the CLA Manager.
 func (c *Core) RegisterConvergable(conv cla.Convergable) {
 	c.claManager.Register(conv)
+}
+
+// RegisterCLA registers a CLA with the clamanager (just as the RegisterConvergable-method)
+// but also adds the CLAs endpoint id to the set of registered IDs for its type.
+func (c *Core) RegisterCLA(conv cla.Convergable, claType cla.CLAType, eid bundle.EndpointID) {
+	c.claManager.RegisterEndpointID(claType, eid)
+	c.claManager.Register(conv)
+}
+
+// RegisteredCLAs returns the EndpointIDs of all registered CLAs of the specified type.
+// Returns an empty slice if no CLAs of the tye exist.
+func (c *Core) RegisteredCLAs(claType cla.CLAType) []bundle.EndpointID {
+	return c.claManager.EndpointIDs(claType)
 }

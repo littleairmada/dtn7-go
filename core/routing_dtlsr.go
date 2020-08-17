@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2019 Markus Sommer
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package core
 
 import (
@@ -145,7 +150,7 @@ func NewDTLSR(c *Core, config DTLSRConfig) *DTLSR {
 
 	// register our custom metadata-block
 	extensionBlockManager := bundle.GetExtensionBlockManager()
-	if !extensionBlockManager.IsKnown(ExtBlockTypeDTLSRBlock) {
+	if !extensionBlockManager.IsKnown(bundle.ExtBlockTypeDTLSRBlock) {
 		// since we already checked if the block type exists, this really shouldn't ever fail...
 		_ = extensionBlockManager.Register(NewDTLSRBlock(dtlsr.peers))
 	}
@@ -154,7 +159,7 @@ func NewDTLSR(c *Core, config DTLSRConfig) *DTLSR {
 }
 
 func (dtlsr *DTLSR) NotifyIncoming(bp BundlePack) {
-	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(ExtBlockTypeDTLSRBlock); err == nil {
+	if metaDataBlock, err := bp.MustBundle().ExtensionBlock(bundle.ExtBlockTypeDTLSRBlock); err == nil {
 		log.WithFields(log.Fields{
 			"peer": bp.MustBundle().PrimaryBlock.SourceNode,
 		}).Debug("Received metadata")
@@ -587,11 +592,9 @@ func (dtlsr *DTLSR) purgePeers() {
 	}
 }
 
-// TODO: Turn this into an administrative record
-
-const ExtBlockTypeDTLSRBlock uint64 = 193
-
 // DTLSRBlock contains routing metadata
+//
+// TODO: Turn this into an administrative record
 type DTLSRBlock peerData
 
 func NewDTLSRBlock(data peerData) *DTLSRBlock {
@@ -604,7 +607,7 @@ func (dtlsrb *DTLSRBlock) getPeerData() peerData {
 }
 
 func (dtlsrb *DTLSRBlock) BlockTypeCode() uint64 {
-	return ExtBlockTypeDTLSRBlock
+	return bundle.ExtBlockTypeDTLSRBlock
 }
 
 func (dtlsrb *DTLSRBlock) CheckValid() error {

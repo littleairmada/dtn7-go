@@ -1,8 +1,15 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2020 Markus Sommer
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package discovery
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/dtn7/dtn7-go/cla"
 
 	"github.com/dtn7/dtn7-go/bundle"
 )
@@ -10,22 +17,22 @@ import (
 func TestDiscoveryMessageCbor(t *testing.T) {
 	var tests = []DiscoveryMessage{
 		{
-			Type:     MTCP,
+			Type:     cla.MTCP,
 			Endpoint: bundle.MustNewEndpointID("dtn://foobar/"),
 			Port:     8000,
 		},
 		{
-			Type:     TCPCL,
+			Type:     cla.TCPCL,
 			Endpoint: bundle.MustNewEndpointID("dtn://foobar/"),
 			Port:     8000,
 		},
 		{
-			Type:     MTCP,
+			Type:     cla.MTCP,
 			Endpoint: bundle.MustNewEndpointID("ipn:1337.23"),
 			Port:     12345,
 		},
 		{
-			Type:     TCPCL,
+			Type:     cla.TCPCL,
 			Endpoint: bundle.MustNewEndpointID("ipn:1337.23"),
 			Port:     12345,
 		},

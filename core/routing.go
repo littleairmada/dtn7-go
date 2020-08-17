@@ -1,9 +1,18 @@
+// SPDX-FileCopyrightText: 2019 Markus Sommer
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package core
 
 import (
+	"fmt"
+	"regexp"
+
 	"github.com/dtn7/dtn7-go/bundle"
 	"github.com/dtn7/dtn7-go/cla"
 	"github.com/dtn7/dtn7-go/storage"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,7 +32,7 @@ type RoutingAlgorithm interface {
 	DispatchingAllowed(bp BundlePack) bool
 
 	// SenderForBundle returns an array of ConvergenceSender for a requested
-	// bundle. Furthermore the finished flags indicates if this BundlePack should
+	// bundle. Furthermore the delete flags indicates if this BundlePack should
 	// be deleted afterwards.
 	// The CLA selection is based on the algorithm's design.
 	SenderForBundle(bp BundlePack) (sender []cla.ConvergenceSender, delete bool)
@@ -40,17 +49,58 @@ type RoutingAlgorithm interface {
 	ReportPeerDisappeared(peer cla.Convergence)
 }
 
-// RoutingConfig contains necessary configuration data to initialise a routing algorithm
+// RoutingConf contains necessary configuration data to initialize a routing algorithm.
 type RoutingConf struct {
-	// Algorithm is one of the implemented routing-algorithms
-	// May be: "epidemic", "spray", "binary_spray", "dtlsr"
+	// Algorithm is one of the implemented routing algorithms.
+	//
+	// One of: "epidemic", "spray", "binary_spray", "dtlsr", "prophet", "sensor-mule"
 	Algorithm string
-	// SprayConf contains data to initialise spray & binary_spray
+
+	// SprayConf contains data to initialize "spray" or "binary_spray"
 	SprayConf SprayConfig
-	// DTLSRConf contains data to initialise dtlsr
+
+	// DTLSRConf contains data to initialize "dtlsr"
 	DTLSRConf DTLSRConfig
-	// ProphetConf contains data to initialise prophet
+
+	// ProphetConf contains data to initialize "prophet"
 	ProphetConf ProphetConfig
+
+	// SensorNetworkMuleConfig contains data to initialize "sensor-mule"
+	SensorMuleConf SensorNetworkMuleConfig `toml:"sensor-mule-conf"`
+}
+
+// RoutingAlgorithm from its configuration.
+func (routingConf RoutingConf) RoutingAlgorithm(c *Core) (ra RoutingAlgorithm, err error) {
+	switch routingConf.Algorithm {
+	case "epidemic":
+		ra = NewEpidemicRouting(c)
+
+	case "spray":
+		ra = NewSprayAndWait(c, routingConf.SprayConf)
+
+	case "binary_spray":
+		ra = NewBinarySpray(c, routingConf.SprayConf)
+
+	case "dtlsr":
+		ra = NewDTLSR(c, routingConf.DTLSRConf)
+
+	case "prophet":
+		ra = NewProphet(c, routingConf.ProphetConf)
+
+	case "sensor-mule":
+		if algo, algoErr := routingConf.SensorMuleConf.Algorithm.RoutingAlgorithm(c); algoErr != nil {
+			err = algoErr
+		} else if sensorNode, sensorNodeErr := regexp.Compile(routingConf.SensorMuleConf.SensorNodeRegex); sensorNodeErr != nil {
+			err = sensorNodeErr
+		} else {
+			ra = NewSensorNetworkMuleRouting(algo, sensorNode)
+		}
+
+	default:
+		err = fmt.Errorf("unknown routing algorithm %s", routingConf.Algorithm)
+	}
+
+	return
 }
 
 // sendMetadataBundle can be used by routing algorithm to send relevant metadata to peers
@@ -82,7 +132,9 @@ func sendMetadataBundle(c *Core, source bundle.EndpointID, destination bundle.En
 	return nil
 }
 
-// filterCLAs filters the node's which already received a Bundle for a specific routing algorithm, e.g., "epidemic".
+// filterCLAs filters the nodes which already received a Bundle for a specific routing algorithm, e.g., "epidemic".
+// It returns a list of unused ConvergenceSenders and an updated list of all sent EndpointIDs. The second should be
+// stored as "routing/${algorithm}/sent" within the specific algorithm.
 func filterCLAs(bundleItem storage.BundleItem, clas []cla.ConvergenceSender, algorithm string) (filtered []cla.ConvergenceSender, sentEids []bundle.EndpointID) {
 	filtered = make([]cla.ConvergenceSender, 0)
 

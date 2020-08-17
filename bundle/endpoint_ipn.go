@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -66,6 +70,13 @@ func (e IpnEndpoint) Authority() string {
 // Path is the path part of the Endpoint URI, e.g., "42" for "ipn:23.42".
 func (e IpnEndpoint) Path() string {
 	return fmt.Sprintf("%d", e.Service)
+}
+
+// IsSingleton checks if this Endpoint represents a singleton.
+//
+// All IPN Endpoints are singletons by definition.
+func (_ IpnEndpoint) IsSingleton() bool {
+	return true
 }
 
 // CheckValid returns an array of errors for incorrect data.

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -30,7 +34,7 @@ func TestEndpointCheckValid(t *testing.T) {
 		ep    EndpointID
 		valid bool
 	}{
-		{EndpointID{&DtnEndpoint{dtnEndpointDtnNoneSsp}}, true},
+		{EndpointID{&DtnEndpoint{IsDtnNone: true}}, true},
 		{EndpointID{&IpnEndpoint{0, 0}}, false},
 		{EndpointID{&IpnEndpoint{0, 1}}, false},
 		{EndpointID{&IpnEndpoint{1, 0}}, false},
@@ -110,6 +114,92 @@ func TestEndpointUri(t *testing.T) {
 		}
 		if path := ep.Path(); test.path != path {
 			t.Fatalf("Path: expected %s, got %s", test.path, path)
+		}
+	}
+}
+
+func TestEndpointSingleton(t *testing.T) {
+	tests := []struct {
+		eid       string
+		singleton bool
+	}{
+		{"dtn:none", false},
+		{"dtn://foobar/", true},
+		{"dtn://foo/bar", true},
+		{"dtn://foo/bar/", true},
+		{"dtn://foobar/~", false},
+		{"dtn://foo/~bar", false},
+		{"dtn://foo/~bar/", false},
+		{"ipn:1.1", true},
+		{"ipn:23.42", true},
+	}
+
+	for _, test := range tests {
+		ep, err := NewEndpointID(test.eid)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if singleton := ep.IsSingleton(); test.singleton != singleton {
+			t.Fatalf("%s: expected singleton %t, got %t", test.eid, test.singleton, singleton)
+		}
+	}
+}
+
+func TestEndpointIDSameNode(t *testing.T) {
+	tests := []struct {
+		eid1  string
+		eid2  string
+		valid bool
+	}{
+		{
+			eid1:  "dtn://foo/",
+			eid2:  "dtn://foo/",
+			valid: true,
+		},
+		{
+			eid1:  "dtn://foo/",
+			eid2:  "dtn://foo/bar",
+			valid: true,
+		},
+		{
+			eid1:  "dtn://foo/bar",
+			eid2:  "dtn://foo/",
+			valid: true,
+		},
+		{
+			eid1:  "dtn://foo/bar",
+			eid2:  "dtn://foo/buz",
+			valid: true,
+		},
+		{
+			eid1:  "dtn://foo/bar",
+			eid2:  "dtn://bar/foo",
+			valid: false,
+		},
+		{
+			eid1:  "ipn:23.42",
+			eid2:  "dtn://23/42",
+			valid: false,
+		},
+	}
+
+	for _, test := range tests {
+		eid1, eid1Err := NewEndpointID(test.eid1)
+		if eid1Err != nil {
+			t.Fatal(eid1Err)
+		}
+
+		eid2, eid2Err := NewEndpointID(test.eid2)
+		if eid2Err != nil {
+			t.Fatal(eid2Err)
+		}
+
+		if res := eid1.SameNode(eid2); res != test.valid {
+			t.Fatalf("%v.IsSameNode(%v) := %t", eid1, eid2, res)
+		}
+		if res := eid2.SameNode(eid1); res != test.valid {
+			t.Fatalf("%v.IsSameNode(%v) := %t", eid2, eid1, res)
 		}
 	}
 }

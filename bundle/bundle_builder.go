@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bundle
 
 import (
@@ -33,7 +37,7 @@ func Builder() *BundleBuilder {
 	return &BundleBuilder{
 		err: nil,
 
-		primary:          PrimaryBlock{Version: dtnVersion},
+		primary:          PrimaryBlock{Version: dtnVersion, BundleControlFlags: StatusRequestDelivery},
 		canonicals:       []CanonicalBlock{},
 		canonicalCounter: 2,
 		crcType:          CRCNo,
@@ -80,8 +84,6 @@ func (bldr *BundleBuilder) Build() (bndl Bundle, err error) {
 		bldr.primary.SetCRCType(bldr.crcType)
 	}
 
-	// TODO: sort canonicals
-
 	bndl, err = NewBundle(bldr.primary, bldr.canonicals)
 	if err == nil {
 		bndl.SetCRCType(bldr.crcType)
@@ -115,17 +117,22 @@ func bldrParseEndpoint(eid interface{}) (e EndpointID, err error) {
 	return
 }
 
-// bldrParseLifetime returns a microsecond as an uint for a given microsecond
-// or a duration string, which will be parsed.
-func bldrParseLifetime(duration interface{}) (us uint64, err error) {
+// bldrParseLifetime returns a millisecond as an uint for a given millisecond or a duration string, which will be parsed.
+func bldrParseLifetime(duration interface{}) (ms uint64, err error) {
 	switch duration := duration.(type) {
 	case uint64:
-		us = duration
+		ms = duration
 	case int:
 		if duration < 0 {
 			err = fmt.Errorf("lifetime's duration %d <= 0", duration)
 		} else {
-			us = uint64(duration)
+			ms = uint64(duration)
+		}
+	case float64:
+		if duration < 0 {
+			err = fmt.Errorf("lifetime's duration %f <= 0", duration)
+		} else {
+			ms = uint64(duration)
 		}
 	case string:
 		dur, durErr := time.ParseDuration(duration)
@@ -134,11 +141,12 @@ func bldrParseLifetime(duration interface{}) (us uint64, err error) {
 		} else if dur <= 0 {
 			err = fmt.Errorf("lifetime's duration %d <= 0", dur)
 		} else {
-			us = uint64(dur.Nanoseconds() / 1000)
+			ms = uint64(dur.Nanoseconds() / 1000000)
 		}
+	case time.Duration:
+		ms = uint64(duration.Nanoseconds() / 1000000)
 	default:
-		err = fmt.Errorf(
-			"%T is neither an uin nor a string for a Duration", duration)
+		err = fmt.Errorf("%T is an unsupported type to parse a Duration from", duration)
 	}
 	return
 }
@@ -218,12 +226,13 @@ func (bldr *BundleBuilder) CreationTimestampTime(t time.Time) *BundleBuilder {
 }
 
 // Lifetime sets the bundle's lifetime, stored in its primary block. Possible
-// values are an uint/int, representing the lifetime in microseconds or a format
-// string for the duration. This string is passed to time.ParseDuration.
+// values are an uint/int, representing the lifetime in milliseconds, a format
+// string (compare time.ParseDuration) for the duration or a time.Duration.
 //
-//   Lifetime(1000)     // Lifetime of 1000us
-//   Lifetime("1000us") // Lifetime of 1000us
-//   Lifetime("10m")    // Lifetime of 10min
+//   Lifetime(1000)             // Lifetime of 1000ms
+//   Lifetime("1000ms")         // Lifetime of 1000ms
+//   Lifetime("10m")            // Lifetime of 10min
+//   Lifetime(10 * time.Minute) // Lifetime of 10min
 //
 func (bldr *BundleBuilder) Lifetime(duration interface{}) *BundleBuilder {
 	if bldr.err != nil {
@@ -326,28 +335,39 @@ func (bldr *BundleBuilder) Canonical(args ...interface{}) *BundleBuilder {
 	return bldr
 }
 
+// canonicalParseFlags is a helper function for the following specific Canonical / Extension Blocks to get the flags.
+func (bldr *BundleBuilder) canonicalParseFlags(args ...interface{}) (flags BlockControlFlags) {
+	if len(args) == 2 {
+		if passedFlags, ok := args[1].(BlockControlFlags); !ok {
+			bldr.err = fmt.Errorf("second parameter are no BlockControlFlags")
+		} else {
+			flags = passedFlags
+		}
+	}
+
+	return
+}
+
 // BundleAgeBlock adds a bundle age block to this bundle. The parameters are:
 //
 //   Age[, BlockControlFlags]
 //
-//   where Age is the age as an uint in microsecond or a format string and
-//   BlockControlFlags are _optional_ block processing control flags
+//   where Age is the age as an uint in milliseconds, a format string or a time.Duration
+//   and BlockControlFlags are _optional_ block processing control flags
 //
 func (bldr *BundleBuilder) BundleAgeBlock(args ...interface{}) *BundleBuilder {
 	if bldr.err != nil {
 		return bldr
 	}
 
-	us, usErr := bldrParseLifetime(args[0])
-	if usErr != nil {
-		bldr.err = usErr
+	ms, msErr := bldrParseLifetime(args[0])
+	if msErr != nil {
+		bldr.err = msErr
 	}
 
-	// Call Canonical as a variadic function with:
-	// - ExtensionBlock: BundleAgeBlock with parsed microseconds
-	// - BlockControlFlags: BlockControlFlags, if given
-	return bldr.Canonical(
-		append([]interface{}{NewBundleAgeBlock(us)}, args[1:]...)...)
+	flags := bldr.canonicalParseFlags(args) | ReplicateBlock
+
+	return bldr.Canonical(NewBundleAgeBlock(ms), flags)
 }
 
 // HopCountBlock adds a hop count block to this bundle. The parameters are:
@@ -367,9 +387,9 @@ func (bldr *BundleBuilder) HopCountBlock(args ...interface{}) *BundleBuilder {
 		bldr.err = fmt.Errorf("HopCountBlock received wrong parameter type")
 	}
 
-	// Read the comment in BundleAgeBlock to grasp the following madness
-	return bldr.Canonical(append(
-		[]interface{}{NewHopCountBlock(uint8(limit))}, args[1:]...)...)
+	flags := bldr.canonicalParseFlags(args) | ReplicateBlock
+
+	return bldr.Canonical(NewHopCountBlock(uint8(limit)), flags)
 }
 
 // PayloadBlock adds a payload block to this bundle. The parameters are:
@@ -408,8 +428,9 @@ func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 		bldr.err = eidErr
 	}
 
-	return bldr.Canonical(
-		append([]interface{}{NewPreviousNodeBlock(eid)}, args[1:]...)...)
+	flags := bldr.canonicalParseFlags(args) | ReplicateBlock
+
+	return bldr.Canonical(NewPreviousNodeBlock(eid), flags)
 }
 
 // BuildFromMap creates a Bundle from a map which "calls" the BundleBuilder's methods.
