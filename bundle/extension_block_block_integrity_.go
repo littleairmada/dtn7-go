@@ -3,7 +3,7 @@ package bundle
 import "io"
 
 // ExtBlockTypeBlockIntegrityBlock is the block type code for a Block Integrity Block (BIB)
-const ExtBlockTypeBlockIntegrityBlock uint64 = 20
+const ExtBlockTypeBlockIntegrityBlock uint64 = 3
 
 // BlockIntegrityBlock implements the BPSEC Block Integrity Block (BIB)
 type BlockIntegrityBlock struct {
