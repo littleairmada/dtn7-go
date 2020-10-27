@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog][keep-a-changelog], and this
 project adheres to [Semantic Versioning][semantic-versioning].
 
 <!--
+Please keep the text width at 72 chars for easy copying into git tags.
+
+
 Types of changes:
 
 - Added       for new features.
@@ -23,15 +26,40 @@ Types of changes:
 -->
 
 ## [Unreleased]
+### Changed
+- Move all Go packages into the pkg directory.
+- Renamed bundle package to bpv7. This new name better describes that it
+  is about bpbis and not just bundles. Furthermore this allows to use
+  the obvious variable name "bundle".
+- Unlink discovery from Core.
+
+### Fixed
+- Include nil-check for EndpointID's internal representation.
+
+
+## [0.9.0] - 2020-10-08
 ### Added
 - Specific routing algorithm for data mules in sensor networks.
-- Socket Convergence Layer Protocol (SoCLP) for bidirectional bundle
-  exchange over different socket-like protocols.
-- Add all the necessary contrib files to run dtnd as a daemon. Packages can be built without having to rely on external sources.
+- Additional contrib files to used dtnd with systemd and ufw.
+- GitHub Action to perform multiple Go Race Detector tests at night.
+- Add WebSocket-based variant of TCPCLv4.
 
 ### Changed
 - An invalid EndpointID struct is interpreted as dtn:none.
 - Compare EndpointIDs based on both scheme and authority part.
+- Allow any bundle.ExtensionBlock to implement a json.Marshaler for a
+  more human readable output. This was done for the bpbis blocks.
+- bundle.ExtensionBlock has a "BlockTypeName" next to its type code for
+  a human readable output.
+- Renamed cla/tcpcl package to cla/tcpclv4.
+- Renamed tcpcl to tcpclv4 in dtnd's configuration.
+- Bump draft-ietf-dtn-tcpclv4 version from 14 to 21.
+- API change on cla.Convergence and cla.ConvergenceSender.
+- Changed CLAType numbers to allow grouping similar Convergence Layers.
+
+### Fixed
+- Check if WebSocket Agent's channel is closed to mitigate dtn-tool from
+  crashing.
 
 
 ## [0.8.0] - 2020-08-05
@@ -53,7 +81,7 @@ Types of changes:
 ### Removed
 - Drop compatibility with Go versions below 1.13.
 
-### Fix
+### Fixed
 - Ensure only Payload Blocks are allowed to get Block Number 1 when
   adding Extension Blocks to an empty Bundle.
 - PrimaryBlock: always overwrite CRC, don't rely on cached values
@@ -264,7 +292,8 @@ First, unstable release
 [0.7.0]: https://github.com/dtn7/dtn7-go/compare/v0.6.1...v0.7.0
 [0.7.1]: https://github.com/dtn7/dtn7-go/compare/v0.7.0...v0.7.1
 [0.8.0]: https://github.com/dtn7/dtn7-go/compare/v0.7.1...v0.8.0
-[Unreleased]: https://github.com/dtn7/dtn7-go/compare/v0.8.0...master
+[0.9.0]: https://github.com/dtn7/dtn7-go/compare/v0.8.0...v0.9.0
+[Unreleased]: https://github.com/dtn7/dtn7-go/compare/v0.9.0...master
 
 
 <!-- vim: set tw=72 colorcolumn=72 ts=2 ft=markdown spell: -->

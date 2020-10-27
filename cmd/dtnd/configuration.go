@@ -18,14 +18,15 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/BurntSushi/toml"
-	"github.com/dtn7/dtn7-go/agent"
-	"github.com/dtn7/dtn7-go/bundle"
-	"github.com/dtn7/dtn7-go/cla"
-	"github.com/dtn7/dtn7-go/cla/bbc"
-	"github.com/dtn7/dtn7-go/cla/mtcp"
-	"github.com/dtn7/dtn7-go/cla/tcpcl"
-	"github.com/dtn7/dtn7-go/core"
-	"github.com/dtn7/dtn7-go/discovery"
+
+	"github.com/dtn7/dtn7-go/pkg/agent"
+	"github.com/dtn7/dtn7-go/pkg/bpv7"
+	"github.com/dtn7/dtn7-go/pkg/cla"
+	"github.com/dtn7/dtn7-go/pkg/cla/bbc"
+	"github.com/dtn7/dtn7-go/pkg/cla/mtcp"
+	"github.com/dtn7/dtn7-go/pkg/cla/tcpclv4"
+	"github.com/dtn7/dtn7-go/pkg/discovery"
+	"github.com/dtn7/dtn7-go/pkg/routing"
 )
 
 // tomlConfig describes the TOML-configuration.
@@ -36,7 +37,7 @@ type tomlConfig struct {
 	Agents    agentsConfig
 	Listen    []convergenceConf
 	Peer      []convergenceConf
-	Routing   core.RoutingConf
+	Routing   routing.RoutingConf
 }
 
 // coreConf describes the Core-configuration block.
@@ -92,7 +93,7 @@ func parseListenPort(endpoint string) (port int, err error) {
 }
 
 // parseListen inspects a "listen" convergenceConf and returns a Convergable.
-func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergable, bundle.EndpointID, cla.CLAType, discovery.DiscoveryMessage, error) {
+func parseListen(conv convergenceConf, nodeId bpv7.EndpointID) (cla.Convergable, bpv7.EndpointID, cla.CLAType, discovery.Announcement, error) {
 	log.WithFields(log.Fields{
 		"EndpointID": conv.Node,
 		"Endpoint":   conv.Endpoint,
@@ -101,9 +102,9 @@ func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergabl
 
 	// if the user has configured an EndpointID for this convergence adaptor
 	if conv.Node != "" {
-		parsedId, err := bundle.NewEndpointID(conv.Node)
+		parsedId, err := bpv7.NewEndpointID(conv.Node)
 		if err != nil {
-			return nil, nodeId, 0, discovery.DiscoveryMessage{}, err
+			return nil, nodeId, 0, discovery.Announcement{}, err
 		} else {
 			log.WithFields(log.Fields{
 				"listener ID": conv.Node,
@@ -115,15 +116,15 @@ func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergabl
 	switch conv.Protocol {
 	case "bbc":
 		conn, err := bbc.NewBundleBroadcastingConnector(conv.Endpoint, true)
-		return conn, nodeId, cla.BBC, discovery.DiscoveryMessage{}, err
+		return conn, nodeId, cla.BBC, discovery.Announcement{}, err
 
 	case "mtcp":
 		portInt, err := parseListenPort(conv.Endpoint)
 		if err != nil {
-			return nil, nodeId, cla.MTCP, discovery.DiscoveryMessage{}, err
+			return nil, nodeId, cla.MTCP, discovery.Announcement{}, err
 		}
 
-		msg := discovery.DiscoveryMessage{
+		msg := discovery.Announcement{
 			Type:     cla.MTCP,
 			Endpoint: nodeId,
 			Port:     uint(portInt),
@@ -131,39 +132,63 @@ func parseListen(conv convergenceConf, nodeId bundle.EndpointID) (cla.Convergabl
 
 		return mtcp.NewMTCPServer(conv.Endpoint, nodeId, true), nodeId, cla.MTCP, msg, nil
 
-	case "tcpcl":
+	case "tcpclv4":
 		portInt, err := parseListenPort(conv.Endpoint)
 		if err != nil {
-			return nil, nodeId, cla.TCPCL, discovery.DiscoveryMessage{}, err
+			return nil, nodeId, cla.TCPCLv4, discovery.Announcement{}, err
 		}
 
-		listener := tcpcl.NewListener(conv.Endpoint, nodeId)
+		listener := tcpclv4.ListenTCP(conv.Endpoint, nodeId)
 
-		msg := discovery.DiscoveryMessage{
-			Type:     cla.TCPCL,
+		msg := discovery.Announcement{
+			Type:     cla.TCPCLv4,
 			Endpoint: nodeId,
 			Port:     uint(portInt),
 		}
 
-		return listener, nodeId, cla.TCPCL, msg, nil
+		return listener, nodeId, cla.TCPCLv4, msg, nil
+
+	case "tcpclv4-ws":
+		listener := tcpclv4.ListenWebSocket(nodeId)
+
+		httpMux := http.NewServeMux()
+		httpMux.Handle("/tcpclv4", listener)
+		httpServer := &http.Server{
+			Addr:    conv.Endpoint,
+			Handler: httpMux,
+		}
+
+		errChan := make(chan error)
+		go func() { errChan <- httpServer.ListenAndServe() }()
+
+		select {
+		case err := <-errChan:
+			return nil, nodeId, cla.TCPCLv4WebSocket, discovery.Announcement{}, err
+
+		case <-time.After(100 * time.Millisecond):
+			return listener, nodeId, cla.TCPCLv4WebSocket, discovery.Announcement{}, nil
+		}
 
 	default:
-		return nil, nodeId, 0, discovery.DiscoveryMessage{}, fmt.Errorf("unknown listen.protocol \"%s\"", conv.Protocol)
+		return nil, nodeId, 0, discovery.Announcement{}, fmt.Errorf("unknown listen.protocol \"%s\"", conv.Protocol)
 	}
 }
 
-func parsePeer(conv convergenceConf, nodeId bundle.EndpointID) (cla.ConvergenceSender, error) {
-	endpointID, err := bundle.NewEndpointID(conv.Node)
-	if err != nil {
-		return nil, err
-	}
+func parsePeer(conv convergenceConf, nodeId bpv7.EndpointID) (cla.ConvergenceSender, error) {
 
 	switch conv.Protocol {
 	case "mtcp":
-		return mtcp.NewMTCPClient(conv.Endpoint, endpointID, true), nil
+		if endpointID, err := bpv7.NewEndpointID(conv.Node); err != nil {
+			return nil, err
+		} else {
+			return mtcp.NewMTCPClient(conv.Endpoint, endpointID, true), nil
+		}
 
-	case "tcpcl":
-		return tcpcl.DialClient(conv.Endpoint, nodeId, true), nil
+	case "tcpclv4":
+		return tcpclv4.DialTCP(conv.Endpoint, nodeId, true), nil
+
+	case "tcpclv4-ws":
+		return tcpclv4.DialWebSocket(conv.Endpoint, nodeId, true), nil
 
 	default:
 		return nil, fmt.Errorf("unknown peer.protocol \"%s\"", conv.Protocol)
@@ -215,7 +240,7 @@ func parseAgents(conf agentsConfig) (agents []agent.ApplicationAgent, err error)
 }
 
 // parseCore creates the Core based on the given TOML configuration.
-func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, err error) {
+func parseCore(filename string) (c *routing.Core, ds *discovery.Manager, err error) {
 	var conf tomlConfig
 	if _, err = toml.DecodeFile(filename, &conf); err != nil {
 		return
@@ -252,11 +277,11 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 		log.Warn("Unknown logging format")
 	}
 
-	var discoveryMsgs []discovery.DiscoveryMessage
+	var discoveryMsgs []discovery.Announcement
 
 	// Core
 	if conf.Core.Store == "" {
-		err = fmt.Errorf("core.store is empty")
+		err = fmt.Errorf("routing.store is empty")
 		return
 	}
 
@@ -264,7 +289,7 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 		"routing": conf.Routing.Algorithm,
 	}).Debug("Selected routing algorithm")
 
-	nodeId, nodeErr := bundle.NewEndpointID(conf.Core.NodeId)
+	nodeId, nodeErr := bpv7.NewEndpointID(conf.Core.NodeId)
 	if nodeErr != nil {
 		err = nodeErr
 		return
@@ -277,7 +302,7 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 		}
 	}
 
-	if c, err = core.NewCore(conf.Core.Store, nodeId, conf.Core.InspectAllBundles, conf.Routing, signPriv); err != nil {
+	if c, err = routing.NewCore(conf.Core.Store, nodeId, conf.Core.InspectAllBundles, conf.Routing, signPriv); err != nil {
 		return
 	}
 
@@ -300,7 +325,7 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 			return
 		} else {
 			c.RegisterCLA(convRec, claType, eid)
-			if discoMsg != (discovery.DiscoveryMessage{}) {
+			if discoMsg != (discovery.Announcement{}) {
 				discoveryMsgs = append(discoveryMsgs, discoMsg)
 			}
 		}
@@ -326,9 +351,9 @@ func parseCore(filename string) (c *core.Core, ds *discovery.DiscoveryService, e
 			conf.Discovery.Interval = 10
 		}
 
-		ds, err = discovery.NewDiscoveryService(
-			discoveryMsgs, c, conf.Discovery.Interval,
-			conf.Discovery.IPv4, conf.Discovery.IPv6)
+		ds, err = discovery.NewManager(
+			c.NodeId, c.RegisterConvergable, discoveryMsgs,
+			time.Duration(conf.Discovery.Interval)*time.Second, conf.Discovery.IPv4, conf.Discovery.IPv6)
 		if err != nil {
 			return
 		}
