@@ -14,7 +14,7 @@ type TargetSecResultsSet struct {
 // AbstractSecBlock implements the Abstract Security Block (ABS) data structure described in BPSEC 3.6.
 type AbstractSecBlock struct {
 	secTargets           []*uint64
-	secContextID         uint64 //TODO Pointer to Security Context Type?
+	secContextID         uint64
 	secContextFlags      byte
 	secSource            EndpointID
 	secContextParameters []IDValueTuple
