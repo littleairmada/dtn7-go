@@ -20,3 +20,5 @@ type AbstractSecBlock struct {
 	secContextParameters []IDValueTuple
 	secResults           []TargetSecResultsSet
 }
+
+// TODO: CBOR

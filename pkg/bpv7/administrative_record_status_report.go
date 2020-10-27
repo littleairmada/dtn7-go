@@ -146,6 +146,8 @@ const (
 	// HopLimitExceeded is the "Hop limit exceeded" bundle status report reason
 	// code.
 	HopLimitExceeded StatusReportReason = 9
+	// TODO: ADD BPSEC STATUS STUFF BPSec 11.2
+
 )
 
 func (srr StatusReportReason) String() string {
@@ -179,6 +181,8 @@ func (srr StatusReportReason) String() string {
 
 	case HopLimitExceeded:
 		return "Hop limit exceeded"
+
+		// TODO: ADD BPSEC STATUS STUFF BPSec 11.2
 
 	default:
 		return "unknown"

@@ -38,6 +38,7 @@ type tomlConfig struct {
 	Listen    []convergenceConf
 	Peer      []convergenceConf
 	Routing   routing.RoutingConf
+	// TODO: Security Config
 }
 
 // coreConf describes the Core-configuration block.

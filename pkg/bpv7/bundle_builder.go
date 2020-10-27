@@ -433,6 +433,9 @@ func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 	return bldr.Canonical(NewPreviousNodeBlock(eid), flags)
 }
 
+// TODO: integrity block confidentiality block be aware of BPSec 3.2
+
+
 // BuildFromMap creates a Bundle from a map which "calls" the BundleBuilder's methods.
 //
 // This function does not use reflection or other dark magic. So it is safe to be called by unchecked data.
@@ -511,6 +514,8 @@ func BuildFromMap(m map[string]interface{}) (bndl Bundle, err error) {
 		// func (bldr *BundleBuilder) PreviousNodeBlock(args ...interface{}) *BundleBuilder
 		case "previous_node_block":
 			bldr.PreviousNodeBlock(args)
+
+		// TODO: case "integrity block"  case "confidentiality block"
 
 		default:
 			err = fmt.Errorf("method %s is either not implemented or not existing", method)
