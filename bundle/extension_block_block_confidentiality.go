@@ -2,9 +2,6 @@ package bundle
 
 import "io"
 
-// ExtBlockTypeBlockConfidentialityBlock is the block type code for a Block Confidentiality Block (BCB)
-const ExtBlockTypeBlockConfidentialityBlock uint64 = 4
-
 // BlockConfidentialityBlock implements the BPSEC Block Confidentiality Block (BCB)
 type BlockConfidentialityBlock struct {
 	absSecBlock AbstractSecBlock

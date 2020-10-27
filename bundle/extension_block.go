@@ -20,6 +20,12 @@ const (
 	// ExtBlockTypePayloadBlock is the block type code for a Payload Block, bundle/extension_block_payload.go
 	ExtBlockTypePayloadBlock uint64 = 1
 
+	// ExtBlockTypeBlockIntegrityBlock is the block type code for a Integrity Block, bundle/extension_block_block_integrity.go
+	ExtBlockTypeBlockIntegrityBlock uint64 = 3
+
+	// ExtBlockTypeBlockConfidentialityBlock is the block type code for a Confidentiality Block, bundle/extension_block_block_confidentiality.go
+	ExtBlockTypeBlockConfidentialityBlock uint64 = 4
+
 	// ExtBlockTypePreviousNodeBlock is the block type code for a Previous Node Block, bundle/extension_block_previous_node.go
 	ExtBlockTypePreviousNodeBlock uint64 = 6
 
@@ -188,6 +194,9 @@ func GetExtensionBlockManager() *ExtensionBlockManager {
 		_ = extensionBlockManager.Register(NewPreviousNodeBlock(DtnNone()))
 		_ = extensionBlockManager.Register(NewBundleAgeBlock(0))
 		_ = extensionBlockManager.Register(NewHopCountBlock(0))
+		
+		// TODO: Add integrity and confidentiality blocks depending on dtnd configuration.
+
 	}
 
 	return extensionBlockManager
