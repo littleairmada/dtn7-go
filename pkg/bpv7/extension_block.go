@@ -201,7 +201,7 @@ func GetExtensionBlockManager() *ExtensionBlockManager {
 		_ = extensionBlockManager.Register(NewBundleAgeBlock(0))
 		_ = extensionBlockManager.Register(NewHopCountBlock(0))
 		
-		// TODO: Add integrity and confidentiality blocks depending on dtnd configuration.
+		// TODO: Add integrity and confidentiality blocks depending on dtnd configuration or dont?
 
 	}
 

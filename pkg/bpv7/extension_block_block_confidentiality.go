@@ -4,7 +4,7 @@ import "io"
 
 // BlockConfidentialityBlock implements the BPSEC Block Confidentiality Block (BCB)
 type BlockConfidentialityBlock struct {
-	absSecBlock AbstractSecBlock
+	abstractSecurityBlock AbstractSecurityBlock
 }
 
 // BlockTypeCode must return a constant integer, indicating the block type code.

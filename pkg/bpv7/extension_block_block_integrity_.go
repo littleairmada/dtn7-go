@@ -6,7 +6,7 @@ import "io"
 
 // BlockIntegrityBlock implements the BPSEC Block Integrity Block (BIB)
 type BlockIntegrityBlock struct {
-	absSecBlock AbstractSecBlock
+	abstractSecurityBlock AbstractSecurityBlock
 }
 
 // BlockTypeCode must return a constant integer, indicating the block type code.
