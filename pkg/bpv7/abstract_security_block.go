@@ -32,8 +32,23 @@ func (idvt *IDValueTuple) MarshalCbor(w io.Writer) error {
 }
 
 // UnmarshalCbor creates this IDValueTuples's based on a CBOR representation.
-func (idvt *IDValueTuple) UnmarshalCbor(r io.Writer) error {
-	// TODO: UnmarshalCbor for IDValueTuple
+func (idvt *IDValueTuple) UnmarshalCbor(r io.Reader) error {
+	if n, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else if n != 2 {
+		return fmt.Errorf("SecurityBlock: IDValueTuple has %d instead of 2 elements", n)
+	}
+
+	if id, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		idvt.ID = id
+	}
+
+	if value, err := cboring.ReadTextString(r); err != nil {
+		idvt.value = value
+	}
+
 	return nil
 }
 
@@ -63,13 +78,36 @@ func (tsr *TargetSecurityResults) MarshalCbor(w io.Writer) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // UnmarshalCbor creates this TargetSecurityResult based on a CBOR representation.
 func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
+	if n, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else if n != 2 {
+		return fmt.Errorf("SecurityBlock: TargetSecurityResults has %d elements, instead of 2", n)
+	}
+
+	if st, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		tsr.securityTarget = st
+	}
+
+	for {
+		idvt := IDValueTuple{}
+		if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
+			break
+		} else if err != nil {
+			return fmt.Errorf("TargetSecuriyResults UnmarshalCbor failed: %v", err)
+		} else {
+			tsr.results = append(tsr.results, idvt)
+		}
+	}
+
 	return nil
-	// TODO: Unmarshal TargetSecurityResults
 }
 
 // Sorted list of Security Context Flags.
@@ -81,7 +119,7 @@ const (
 	SecuritySourcePresentFlag = 0b10
 )
 
-// AbstractSecurityBlock implements the Abstract Security Block (ABS) data structure described in BPSEC 3.6.
+// AbstractSecurityBlock implements the Abstract Security Block (ASB) data structure described in BPSEC 3.6.
 type AbstractSecurityBlock struct {
 	securityTargets                  []uint64
 	securityContextID                uint64
@@ -204,13 +242,13 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 		var duplicateTargets []uint64
 
 		for _, target := range asb.securityTargets {
-			if targetAlreadyExists[target] == true {
+			if targetAlreadyExists[target] {
 				duplicateTargets = append(duplicateTargets, target)
-			}
-			if targetAlreadyExists[target] == false {
+			} else if !targetAlreadyExists[target] {
 				targetAlreadyExists[target] = true
 			}
 		}
+
 		return len(duplicateTargets) != 0, duplicateTargets
 	}()
 
@@ -222,8 +260,9 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 	// There MUST be one entry in SecurityTargets for each entry in SecurityResults.
 	// SecurityTargets and SecurityResults ordering MUST match the results associated with the targets.
 	if len(asb.securityResults) != len(asb.securityTargets) {
-		errs = multierror.Append(errs, errors.New(
-			"number of entries in SecurityResults and SecurityTargets is not equal, could not check ordering"))
+		errs = multierror.Append(errs, fmt.Errorf(
+			"number of entries in SecurityResults and SecurityTargets is not equal #Targets: %v #TargetResultSets: %v, could not check ordering ",
+			len(asb.securityTargets), len(asb.securityResults)))
 	} else {
 		entryOrderDoesNotMatch := func() bool {
 			for i, targetSecurityResult := range asb.securityResults {
@@ -248,12 +287,23 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 				"security block has the Security Source Present Context Flag (0x02) set, but no valid Security Source Field is present"))
 			errs = multierror.Append(errs, err)
 		}
+	} else {
+		if err := asb.securitySource.CheckValid(); err == nil {
+			errs = multierror.Append(errs, errors.New(
+				"security block has the Security Source Present Context Flag (0x02) not set, but a valid Security Source Field is present"))
+		}
 	}
 
 	if asb.HasSecurityContextParametersPresentContextFlag() {
 		if len(asb.SecurityContextParametersPresent) == 0 {
 			errs = multierror.Append(errs, errors.New(
 				"security block has the Security Context Parameters Present Context Flag (0x01) set, but no Security Parameter Context Field is present"))
+
+		}
+	} else {
+		if len(asb.SecurityContextParametersPresent) != 0 {
+			errs = multierror.Append(errs, errors.New(
+				"security block has the Security Context Parameters Present Context Flag (0x01) not set, but the Security Parameter Context Field is present"))
 		}
 	}
 
