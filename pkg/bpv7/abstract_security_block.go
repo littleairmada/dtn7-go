@@ -1,14 +1,20 @@
+// SPDX-FileCopyrightText: 2020 Matthias Axel Kröll
+// SPDX-FileCopyrightText: 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bpv7
 
 import (
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/dtn7/cboring"
 	"github.com/hashicorp/go-multierror"
-	"io"
 )
 
-// IDValueTuple is the Tuple described in BPSec 3.6 and used in SecurityContextParametersPresent and securityResult.
+// IDValueTuple is the Tuple described in BPSec 3.6 and used in SecurityContextParameters and securityResult.
 type IDValueTuple struct {
 	ID    uint64
 	value string
@@ -112,7 +118,7 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 
 // Sorted list of Security Context Flags.
 const (
-	// SecurityContextParametersPresentFlag is the bit which is set if the AbstractSecurityBlock has SecurityContextParametersPresent.
+	// SecurityContextParametersPresentFlag is the bit which is set if the AbstractSecurityBlock has SecurityContextParameters.
 	SecurityContextParametersPresentFlag = 0b01
 
 	// SecuritySourcePresentFlag is the bit which is set if the AbstractSecurityBlock has a SecuritySource.
@@ -121,12 +127,12 @@ const (
 
 // AbstractSecurityBlock implements the Abstract Security Block (ASB) data structure described in BPSEC 3.6.
 type AbstractSecurityBlock struct {
-	securityTargets                  []uint64
-	securityContextID                uint64
-	securityContextFlags             uint64
-	securitySource                   EndpointID
-	SecurityContextParametersPresent []IDValueTuple
-	securityResults                  []TargetSecurityResults
+	securityTargets           []uint64
+	securityContextID         uint64
+	securityContextFlags      uint64
+	securitySource            EndpointID
+	SecurityContextParameters []IDValueTuple
+	securityResults           []TargetSecurityResults
 }
 
 // HasSecurityContextParametersPresentContextFlag interpreters the securityContextFlags for the presence of the
@@ -192,14 +198,14 @@ func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 		}
 	}
 
-	// SecurityContextParametersPresent
+	// SecurityContextParameters
 	if hasSecurityContextParameterContextFlag {
-		parameterCount := uint64(len(asb.SecurityContextParametersPresent))
+		parameterCount := uint64(len(asb.SecurityContextParameters))
 		if err := cboring.WriteArrayLength(parameterCount, w); err != nil {
 			return err
 		}
 
-		for _, securityContextParameter := range asb.SecurityContextParametersPresent {
+		for _, securityContextParameter := range asb.SecurityContextParameters {
 			if err := securityContextParameter.MarshalCbor(w); err != nil {
 				return err
 			}
@@ -223,8 +229,68 @@ func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 
 // UnmarshalCbor creates this AbstractSecurityBlock based on a CBOR representation.
 func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
-	return nil
-	// TODO: Unmarshal Security Block
+	if bl, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else if bl != 4 && bl != 5 && bl != 6 {
+		return fmt.Errorf("expected array with length 4, 5 or 6, got %d", bl)
+	}
+
+	// SecurityTargets
+	if targetCount, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else {
+		for i := uint64(0); i < targetCount; i++ {
+			if st, err := cboring.ReadUInt(r); err != nil {
+				return err
+			} else {
+				asb.securityTargets = append(asb.securityTargets, st)
+			}
+		}
+	}
+
+	// SecurityContextID
+	if scid, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		asb.securityContextID = scid
+	}
+
+	// SecurityContextFlags
+	if scf, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		asb.securityContextFlags = scf
+	}
+
+	// SecuritySource
+	if err := cboring.Unmarshal(&asb.securitySource, r); err != nil {
+		return err
+	}
+	// SecurityContextParameters
+	for {
+		idvt := IDValueTuple{}
+		if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
+			break
+		} else if err != nil {
+			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
+		} else {
+			asb.SecurityContextParameters = append(asb.SecurityContextParameters, idvt)
+		}
+	}
+
+	// SecurityResults
+	for {
+		tsr := TargetSecurityResults{}
+		if err := cboring.Unmarshal(&tsr, r); err == cboring.FlagBreakCode {
+			break
+		} else if err != nil {
+			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityResults : %v", err)
+		} else {
+			asb.securityResults = append(asb.securityResults, tsr)
+		}
+	}
+
+	return asb.CheckValid()
 }
 
 // CheckValid checks for MUST / MUST NOT constraints required by BPSEC 3.6.
@@ -295,13 +361,13 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 	}
 
 	if asb.HasSecurityContextParametersPresentContextFlag() {
-		if len(asb.SecurityContextParametersPresent) == 0 {
+		if len(asb.SecurityContextParameters) == 0 {
 			errs = multierror.Append(errs, errors.New(
 				"security block has the Security Context Parameters Present Context Flag (0x01) set, but no Security Parameter Context Field is present"))
 
 		}
 	} else {
-		if len(asb.SecurityContextParametersPresent) != 0 {
+		if len(asb.SecurityContextParameters) != 0 {
 			errs = multierror.Append(errs, errors.New(
 				"security block has the Security Context Parameters Present Context Flag (0x01) not set, but the Security Parameter Context Field is present"))
 		}

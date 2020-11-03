@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2020 Matthias Axel Kröll
+// SPDX-FileCopyrightText: 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bpv7
 
 // Sorted list of all known security contexts.
@@ -18,7 +23,6 @@ type SecurityContext interface {
 	// SecurityContextName must return a constant string, this security context's name.
 	SecurityContextName() string
 }
-
 
 // TODO: SC MANAGER
 

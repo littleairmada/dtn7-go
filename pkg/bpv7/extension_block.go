@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
-//
+// SPDX-FileCopyrightText: 2020 Matthias Axel Kröll
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package bpv7
@@ -200,7 +200,7 @@ func GetExtensionBlockManager() *ExtensionBlockManager {
 		_ = extensionBlockManager.Register(NewPreviousNodeBlock(DtnNone()))
 		_ = extensionBlockManager.Register(NewBundleAgeBlock(0))
 		_ = extensionBlockManager.Register(NewHopCountBlock(0))
-		
+
 		// TODO: Add integrity and confidentiality blocks depending on dtnd configuration or dont?
 
 	}

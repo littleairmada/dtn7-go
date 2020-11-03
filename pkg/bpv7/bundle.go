@@ -268,7 +268,6 @@ func (b *Bundle) UnmarshalCbor(r io.Reader) error {
 		}
 	}
 
-
 	return b.CheckValid()
 }
 
