@@ -90,24 +90,23 @@ func (tsr *TargetSecurityResults) MarshalCbor(w io.Writer) error {
 
 // UnmarshalCbor creates this TargetSecurityResult based on a CBOR representation.
 func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
-	if n, err := cboring.ReadArrayLength(r); err != nil {
+	arrayLength, err := cboring.ReadArrayLength(r)
+	if err != nil {
 		return err
-	} else if n != 2 {
-		return fmt.Errorf("SecurityBlock: TargetSecurityResults has %d elements, instead of 2", n)
+	} else if arrayLength != 2 {
+		return fmt.Errorf("SecurityBlock: TargetSecurityResults has %d elements, instead of 2", arrayLength)
 	}
 
 	if st, err := cboring.ReadUInt(r); err != nil {
-		return err
+		return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
 	} else {
 		tsr.securityTarget = st
 	}
 
-	for {
+	for i := 0; i < int(arrayLength); i++ {
 		idvt := IDValueTuple{}
-		if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
-			break
-		} else if err != nil {
-			return fmt.Errorf("TargetSecuriyResults UnmarshalCbor failed: %v", err)
+		if err := cboring.Unmarshal(&idvt, r); err != nil {
+			return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
 		} else {
 			tsr.results = append(tsr.results, idvt)
 		}
@@ -231,8 +230,8 @@ func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 	if bl, err := cboring.ReadArrayLength(r); err != nil {
 		return err
-	} else if bl != 4 && bl != 5 && bl != 6 {
-		return fmt.Errorf("expected array with length 4, 5 or 6, got %d", bl)
+	} else if bl != 5 && bl != 6 {
+		return fmt.Errorf("expected array with length 5 or 6, got %d", bl)
 	}
 
 	// SecurityTargets
@@ -267,15 +266,18 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 		return err
 	}
 
-	// SecurityContextParameters
-	for {
-		idvt := IDValueTuple{}
-		if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
-			break
-		} else if err != nil {
-			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
-		} else {
-			asb.SecurityContextParameters = append(asb.SecurityContextParameters, idvt)
+	// SecurityContextParameters (Optional)
+	// Check if SecurityContextFlag is set
+	if asb.securityContextFlags&1 == 1 {
+		for {
+			idvt := IDValueTuple{}
+			if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
+				break
+			} else if err != nil {
+				return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
+			} else {
+				asb.SecurityContextParameters = append(asb.SecurityContextParameters, idvt)
+			}
 		}
 	}
 
@@ -372,12 +374,6 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 			errs = multierror.Append(errs, errors.New(
 				"security block has the Security Context Parameters Present Context Flag (0x01) not set, but the Security Parameter Context Field is present"))
 		}
-	}
-
-	// Reserved bits of SecurityContextFlags MUST be 0.
-	if uint64(0)^(asb.securityContextFlags>>2) != 0 {
-		errs = multierror.Append(errs, errors.New(
-			"reserved bits (bits > 1) of Security Context Flags are not 0"))
 	}
 
 	return errs
