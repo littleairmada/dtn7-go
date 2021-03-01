@@ -5,10 +5,12 @@
 package bpv7
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
+	"time"
 
 	"github.com/dtn7/cboring"
 	"github.com/hashicorp/go-multierror"
@@ -75,6 +77,12 @@ func (b *Bundle) ExtensionBlock(blockType uint64) (*CanonicalBlock, error) {
 	return nil, fmt.Errorf("no CanonicalBlock with block type %d was found in Bundle", blockType)
 }
 
+// HasExtensionBlock checks if a CanonicalBlock / ExtensionBlock for some block type number is present.
+func (b *Bundle) HasExtensionBlock(blockType uint64) bool {
+	_, err := b.ExtensionBlock(blockType)
+	return err == nil
+}
+
 // PayloadBlock returns this Bundle's payload block or an error, if it does
 // not exists.
 func (b *Bundle) PayloadBlock() (*CanonicalBlock, error) {
@@ -123,6 +131,19 @@ func (b *Bundle) AddExtensionBlock(block CanonicalBlock) {
 	b.sortBlocks()
 }
 
+// RemoveExtensionBlockByBlockNumber searches and removes a CanonicalBlock / ExtensionBlock with the given block number.
+//
+// If no such block exists, the method will do nothing. Sorting will not be performed, as we assume that the blocks are
+// already in their correct order.
+func (b *Bundle) RemoveExtensionBlockByBlockNumber(blockNumber uint64) {
+	for i := 0; i < len(b.CanonicalBlocks); i++ {
+		if b.CanonicalBlocks[i].BlockNumber == blockNumber {
+			b.CanonicalBlocks = append(b.CanonicalBlocks[:i], b.CanonicalBlocks[i+1:]...)
+			return
+		}
+	}
+}
+
 // SetCRCType sets the given CRCType for each block. To also calculate and set
 // the CRC value, one should also call the CalculateCRC method.
 func (b *Bundle) SetCRCType(crcType CRCType) {
@@ -147,6 +168,21 @@ func (b Bundle) String() string {
 	return b.ID().String()
 }
 
+// IsLifetimeExceeded of this Bundle by checking an optional Bundle Age Block and the PrimaryBlock's Lifetime.
+func (b Bundle) IsLifetimeExceeded() bool {
+	if b.PrimaryBlock.CreationTimestamp.IsZeroTime() {
+		if bab, err := b.ExtensionBlock(ExtBlockTypeBundleAgeBlock); err != nil {
+			return true
+		} else {
+			return bab.Value.(*BundleAgeBlock).Age() > b.PrimaryBlock.Lifetime
+		}
+	}
+
+	maxTimestamp := b.PrimaryBlock.CreationTimestamp.DtnTime().Time().Add(
+		time.Duration(b.PrimaryBlock.Lifetime) * time.Millisecond)
+	return time.Now().After(maxTimestamp)
+}
+
 // CheckValid returns an array of errors for incorrect data.
 func (b Bundle) CheckValid() (errs error) {
 	// Check blocks for errors
@@ -156,9 +192,15 @@ func (b Bundle) CheckValid() (errs error) {
 		}
 	})
 
+	// Check for CanonicalBlocks
+	if b.CanonicalBlocks == nil || len(b.CanonicalBlocks) == 0 {
+		errs = multierror.Append(errs, fmt.Errorf("Bundle contains no CannonicalBlocks"))
+		// Abort here because the following checks are assuming the presence of CanonicalBlocks
+		return
+	}
+
 	// Check CanonicalBlocks for errors
-	if b.PrimaryBlock.BundleControlFlags.Has(AdministrativeRecordPayload) ||
-		b.PrimaryBlock.SourceNode == DtnNone() {
+	if b.PrimaryBlock.BundleControlFlags.Has(AdministrativeRecordPayload) || b.PrimaryBlock.SourceNode == DtnNone() {
 		for _, cb := range b.CanonicalBlocks {
 			if cb.BlockControlFlags.Has(StatusReportBlock) {
 				errs = multierror.Append(errs,
@@ -205,14 +247,9 @@ func (b Bundle) CheckValid() (errs error) {
 		}
 	}
 
-	// Check if Bundle Age Block's time is exceeded.
-	if canBab, err := b.ExtensionBlock(ExtBlockTypeBundleAgeBlock); err == nil {
-		bundleAge := canBab.Value.(*BundleAgeBlock).Age()
-		if bundleAge > b.PrimaryBlock.Lifetime {
-			errs = multierror.Append(errs, fmt.Errorf(
-				"Bundle: Bundle Age Block's value %d exceeded lifetime %d",
-				bundleAge, b.PrimaryBlock.Lifetime))
-		}
+	// Check if the Bundle's lifetime is exceeded
+	if b.IsLifetimeExceeded() {
+		errs = multierror.Append(errs, fmt.Errorf("Bundle: Lifetime is exceeded"))
 	}
 
 	return
@@ -222,6 +259,23 @@ func (b Bundle) CheckValid() (errs error) {
 // has an administrative record payload.
 func (b Bundle) IsAdministrativeRecord() bool {
 	return b.PrimaryBlock.BundleControlFlags.Has(AdministrativeRecordPayload)
+}
+
+// AdministrativeRecord stored within this Bundle.
+//
+// An error arises if this Bundle is not an AdministrativeRecord, compare IsAdministrativeRecord.
+func (b Bundle) AdministrativeRecord() (AdministrativeRecord, error) {
+	if !b.IsAdministrativeRecord() {
+		return nil, fmt.Errorf("bundle is not an administrative record")
+	}
+
+	payload, err := b.PayloadBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	buff := bytes.NewBuffer(payload.Value.(*PayloadBlock).Data())
+	return GetAdministrativeRecordManager().ReadAdministrativeRecord(buff)
 }
 
 // MarshalCbor writes this Bundle's CBOR representation.

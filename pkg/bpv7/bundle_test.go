@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2018, 2019, 2020, 2021 Alvar Penning
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -37,11 +37,12 @@ func TestBundleApplyCRC(t *testing.T) {
 	for _, crcTest := range []CRCType{CRCNo, CRC16, CRC32, CRCNo} {
 		bndle.SetCRCType(crcTest)
 
-		crcExpect := crcTest
-		if crcExpect == CRCNo {
-			crcExpect = CRC32
+		// NOTE: Until BPsec has landed, set a CRC for primary blocks, see PrimaryBlock.SetCRCType.
+		if crcTest == CRCNo {
+			crcTest = CRC32
 		}
-		if ty := bndle.PrimaryBlock.GetCRCType(); ty != crcExpect {
+
+		if ty := bndle.PrimaryBlock.GetCRCType(); ty != crcTest {
 			t.Fatalf("Bundle's primary block has wrong CRCType, %v instead of %v", ty, crcTest)
 		}
 
@@ -207,6 +208,40 @@ func TestBundleCheckValid(t *testing.T) {
 			t.Fatalf("Block validation failed: %v resulted in %v",
 				test.b, err)
 		}
+	}
+}
+
+func TestBundleAddRemoveExtensionBlocks(t *testing.T) {
+	primary := NewPrimaryBlock(0,
+		MustNewEndpointID("dtn://dst/"),
+		MustNewEndpointID("dtn://src/"),
+		NewCreationTimestamp(DtnTimeEpoch, 0),
+		60*60*1000000)
+	canonicals := []CanonicalBlock{
+		NewCanonicalBlock(2, 0, NewBundleAgeBlock(9001)),
+		NewCanonicalBlock(1, 0, NewPayloadBlock([]byte("hello world"))),
+	}
+
+	b, err := NewBundle(primary, canonicals)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if b.HasExtensionBlock(ExtBlockTypePreviousNodeBlock) {
+		t.Fatalf("previous node block is present")
+	}
+	b.AddExtensionBlock(NewCanonicalBlock(0, 0, NewPreviousNodeBlock(MustNewEndpointID("dtn://prev/"))))
+	if !b.HasExtensionBlock(ExtBlockTypePreviousNodeBlock) {
+		t.Fatalf("previous node block is not present")
+	}
+
+	if previousNodeBlock, err := b.ExtensionBlock(ExtBlockTypePreviousNodeBlock); err != nil {
+		t.Fatal(err)
+	} else {
+		b.RemoveExtensionBlockByBlockNumber(previousNodeBlock.BlockNumber)
+	}
+	if b.HasExtensionBlock(ExtBlockTypePreviousNodeBlock) {
+		t.Fatalf("previous node block is present")
 	}
 }
 

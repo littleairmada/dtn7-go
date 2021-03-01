@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2018, 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2018, 2019, 2020, 2021 Alvar Penning
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/dtn7/cboring"
 	"github.com/hashicorp/go-multierror"
@@ -18,8 +17,7 @@ import (
 
 const dtnVersion uint64 = 7
 
-// PrimaryBlock is a representation of the primary bundle block as defined in
-// section 4.2.2.
+// PrimaryBlock is a representation of the primary bundle block as defined in section 4.3.1.
 type PrimaryBlock struct {
 	Version            uint64
 	BundleControlFlags BundleControlFlags
@@ -63,7 +61,6 @@ func (pb PrimaryBlock) HasFragmentation() bool {
 }
 
 // HasCRC returns if the CRCType indicates a CRC is present for this block.
-// This should be always true for the Primary Block.
 func (pb PrimaryBlock) HasCRC() bool {
 	return pb.GetCRCType() != CRCNo
 }
@@ -74,7 +71,14 @@ func (pb PrimaryBlock) GetCRCType() CRCType {
 }
 
 // SetCRCType sets the CRC type.
+//
+// While a primary block without a CRC might get parsed, created primary blocks
+// MUST have a CRC value attached. Due to draft-bpbis-15 (and newer), all
+// primary blocks require a CRC unless a block integrity block addressing the
+// primary block is present. Thus, until BPsec is available in dtn7-go, all
+// created primary blocks will have a mandatory CRC value.
 func (pb *PrimaryBlock) SetCRCType(crcType CRCType) {
+	// NOTE: Until BPsec has landed, set a CRC for primary blocks.
 	if crcType == CRCNo {
 		crcType = CRC32
 	}
@@ -93,10 +97,20 @@ func (pb *PrimaryBlock) calculateCRC() error {
 
 // MarshalCbor writes the CBOR representation of a PrimaryBlock.
 func (pb *PrimaryBlock) MarshalCbor(w io.Writer) error {
-	var blockLen uint64 = 9
-	if pb.HasFragmentation() {
-		blockLen = 11
-	}
+	blockLen := func() uint64 {
+		switch frag, crc := pb.HasFragmentation(), pb.HasCRC(); {
+		case !frag && !crc:
+			return 8
+		case !frag && crc:
+			return 9
+		case frag && !crc:
+			return 10
+		case frag && crc:
+			return 11
+		default:
+			panic("impossible state")
+		}
+	}()
 
 	crcBuff := new(bytes.Buffer)
 	w = io.MultiWriter(w, crcBuff)
@@ -105,7 +119,7 @@ func (pb *PrimaryBlock) MarshalCbor(w io.Writer) error {
 		return err
 	}
 
-	fields := []uint64{7, uint64(pb.BundleControlFlags), uint64(pb.CRCType)}
+	fields := []uint64{dtnVersion, uint64(pb.BundleControlFlags), uint64(pb.CRCType)}
 	for _, f := range fields {
 		if err := cboring.WriteUInt(f, w); err != nil {
 			return err
@@ -136,12 +150,14 @@ func (pb *PrimaryBlock) MarshalCbor(w io.Writer) error {
 		}
 	}
 
-	if crcVal, crcErr := calculateCRCBuff(crcBuff, pb.CRCType); crcErr != nil {
-		return crcErr
-	} else if err := cboring.WriteByteString(crcVal, w); err != nil {
-		return err
-	} else if !bytes.Equal(pb.CRC, crcVal) {
-		pb.CRC = crcVal
+	if pb.HasCRC() {
+		if crcVal, crcErr := calculateCRCBuff(crcBuff, pb.CRCType); crcErr != nil {
+			return crcErr
+		} else if err := cboring.WriteByteString(crcVal, w); err != nil {
+			return err
+		} else if !bytes.Equal(pb.CRC, crcVal) {
+			pb.CRC = crcVal
+		}
 	}
 
 	return nil
@@ -156,18 +172,18 @@ func (pb *PrimaryBlock) UnmarshalCbor(r io.Reader) error {
 	var blockLen uint64
 	if bl, err := cboring.ReadArrayLength(r); err != nil {
 		return err
-	} else if bl != 9 && bl != 11 {
-		return fmt.Errorf("expected array with length 9 or 11, got %d", bl)
+	} else if !(8 <= bl && bl <= 11) {
+		return fmt.Errorf("expected array with 8 to 11 elements, got %d", bl)
 	} else {
 		blockLen = bl
 	}
 
 	if version, err := cboring.ReadUInt(r); err != nil {
 		return err
-	} else if version != 7 {
-		return fmt.Errorf("expected version 7, got %d", version)
+	} else if version != dtnVersion {
+		return fmt.Errorf("expected version %d, got %d", dtnVersion, version)
 	} else {
-		pb.Version = 7
+		pb.Version = dtnVersion
 	}
 
 	if bcf, err := cboring.ReadUInt(r); err != nil {
@@ -199,7 +215,7 @@ func (pb *PrimaryBlock) UnmarshalCbor(r io.Reader) error {
 		pb.Lifetime = lt
 	}
 
-	if blockLen == 11 {
+	if blockLen == 10 || blockLen == 11 {
 		fields := []*uint64{&pb.FragmentOffset, &pb.TotalDataLength}
 		for _, f := range fields {
 			if x, err := cboring.ReadUInt(r); err != nil {
@@ -210,14 +226,16 @@ func (pb *PrimaryBlock) UnmarshalCbor(r io.Reader) error {
 		}
 	}
 
-	if crcCalc, crcErr := calculateCRCBuff(crcBuff, pb.CRCType); crcErr != nil {
-		return crcErr
-	} else if crcVal, err := cboring.ReadByteString(r); err != nil {
-		return err
-	} else if !bytes.Equal(crcCalc, crcVal) {
-		return fmt.Errorf("invalid CRC value: %x instead of expected %x", crcVal, crcCalc)
-	} else {
-		pb.CRC = crcVal
+	if blockLen == 9 || blockLen == 11 {
+		if crcCalc, crcErr := calculateCRCBuff(crcBuff, pb.CRCType); crcErr != nil {
+			return crcErr
+		} else if crcVal, err := cboring.ReadByteString(r); err != nil {
+			return err
+		} else if !bytes.Equal(crcCalc, crcVal) {
+			return fmt.Errorf("invalid CRC value: %x instead of expected %x", crcVal, crcCalc)
+		} else {
+			pb.CRC = crcVal
+		}
 	}
 
 	return nil
@@ -249,13 +267,6 @@ func (pb PrimaryBlock) CheckValid() (errs error) {
 			fmt.Errorf("PrimaryBlock: Wrong Version, %d instead of %d", pb.Version, dtnVersion))
 	}
 
-	// bpbis-14 enforces a CRC value. However, since bpbis-17 the omission of such a CRC is allowed
-	// iff a BPSec Block Integrity Block exists. Currently, this is not part of the implementation, so a
-	// CRC is required.
-	if !pb.HasCRC() {
-		errs = multierror.Append(errs, fmt.Errorf("PrimaryBlock: No CRC is present"))
-	}
-
 	if bcfErr := pb.BundleControlFlags.CheckValid(); bcfErr != nil {
 		errs = multierror.Append(errs, bcfErr)
 	}
@@ -272,12 +283,8 @@ func (pb PrimaryBlock) CheckValid() (errs error) {
 		errs = multierror.Append(errs, rprtToErr)
 	}
 
-	if pb.IsLifetimeExceeded() {
-		errs = multierror.Append(errs, fmt.Errorf("PrimaryBlock: Lifetime is exceeded"))
-	}
-
-	// 4.1.3 says that "if the bundle's source node is omitted [src = dtn:none]
-	// [...] the "Bundle must not be fragmented" flag value must be 1 and all
+	// 4.2.3 says that "if the bundle's source node is omitted [src = dtn:none]
+	// [...] the bundle must not be fragmented" flag value must be 1 and all
 	// status report request flag values must be zero.
 	// SourceNode == dtn:none => (
 	//    MustNotFragmented
@@ -295,23 +302,6 @@ func (pb PrimaryBlock) CheckValid() (errs error) {
 	}
 
 	return
-}
-
-// IsLifetimeExceeded returns true if this PrimaryBlock's lifetime is exceeded.
-// This method only compares the tuple of the CreationTimestamp and Lifetime
-// against the current time.
-//
-// If the creation timestamp's time value is zero, this method will always
-// return false.
-func (pb PrimaryBlock) IsLifetimeExceeded() bool {
-	if pb.CreationTimestamp.IsZeroTime() {
-		return false
-	}
-
-	currentTs := time.Now()
-	supremumTs := pb.CreationTimestamp.DtnTime().Time().Add(time.Duration(pb.Lifetime) * time.Millisecond)
-
-	return currentTs.After(supremumTs)
 }
 
 func (pb PrimaryBlock) String() string {
@@ -332,7 +322,9 @@ func (pb PrimaryBlock) String() string {
 		_, _ = fmt.Fprintf(&b, "total data length: %d", pb.TotalDataLength)
 	}
 
-	_, _ = fmt.Fprintf(&b, ", crc: %x", pb.CRC)
+	if pb.HasCRC() {
+		_, _ = fmt.Fprintf(&b, ", crc: %x", pb.CRC)
+	}
 
 	return b.String()
 }

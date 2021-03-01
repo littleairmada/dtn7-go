@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+// SPDX-FileCopyrightText: 2019, 2020, 2021 Alvar Penning
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -11,8 +11,6 @@ import (
 
 	"github.com/dtn7/cboring"
 )
-
-const ARTypeStatusReport uint64 = 1
 
 // BundleStatusItem represents the a bundle status item, as used as an element
 // in the bundle status information array of each Bundle Status Report.
@@ -146,8 +144,16 @@ const (
 	// HopLimitExceeded is the "Hop limit exceeded" bundle status report reason
 	// code.
 	HopLimitExceeded StatusReportReason = 9
+
 	// TODO: ADD BPSEC STATUS STUFF BPSec 11.2
 
+	// TrafficPared is the "Traffic pared (e.g., status reports)" bundle status
+	// report reason code.
+	TrafficPared StatusReportReason = 10
+
+	// BlockUnsupported is the "Block unsupported" bundle status report reason
+	// code.
+	BlockUnsupported StatusReportReason = 11
 )
 
 func (srr StatusReportReason) String() string {
@@ -181,6 +187,11 @@ func (srr StatusReportReason) String() string {
 
 	case HopLimitExceeded:
 		return "Hop limit exceeded"
+	case TrafficPared:
+		return "Traffic pared"
+
+	case BlockUnsupported:
+		return "Block unsupported"
 
 		// TODO: ADD BPSEC STATUS STUFF BPSec 11.2
 
@@ -245,9 +256,8 @@ type StatusReport struct {
 // StatusInformationPos, which creates the right bundle status item. The
 // bundle status report reason code will be used and the bundle status item
 // gets the given timestamp.
-func NewStatusReport(bndl Bundle, statusItem StatusInformationPos,
-	reason StatusReportReason, time DtnTime) StatusReport {
-	var sr = StatusReport{
+func NewStatusReport(bndl Bundle, statusItem StatusInformationPos, reason StatusReportReason, time DtnTime) (report *StatusReport) {
+	report = &StatusReport{
 		StatusInformation: make([]BundleStatusItem, maxStatusInformationPos),
 		ReportReason:      reason,
 		RefBundle:         bndl.ID(),
@@ -258,17 +268,16 @@ func NewStatusReport(bndl Bundle, statusItem StatusInformationPos,
 
 		switch {
 		case sip == statusItem && bndl.PrimaryBlock.BundleControlFlags.Has(RequestStatusTime):
-			sr.StatusInformation[i] = NewTimeReportingBundleStatusItem(time)
+			report.StatusInformation[i] = NewTimeReportingBundleStatusItem(time)
 
 		case sip == statusItem:
-			sr.StatusInformation[i] = NewBundleStatusItem(true)
+			report.StatusInformation[i] = NewBundleStatusItem(true)
 
 		default:
-			sr.StatusInformation[i] = NewBundleStatusItem(false)
+			report.StatusInformation[i] = NewBundleStatusItem(false)
 		}
 	}
-
-	return sr
+	return
 }
 
 // StatusInformations returns an array of available StatusInformationPos.
@@ -347,12 +356,12 @@ func (sr *StatusReport) UnmarshalCbor(r io.Reader) error {
 }
 
 func (sr *StatusReport) RecordTypeCode() uint64 {
-	return ARTypeStatusReport
+	return AdminRecordTypeStatusReport
 }
 
 func (sr StatusReport) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "StatusReport([")
+	_, _ = fmt.Fprintf(&b, "StatusReport([")
 
 	for i := 0; i < len(sr.StatusInformation); i++ {
 		si := sr.StatusInformation[i]
@@ -363,14 +372,14 @@ func (sr StatusReport) String() string {
 		}
 
 		if si.Time == DtnTimeEpoch {
-			fmt.Fprintf(&b, "%v,", sip)
+			_, _ = fmt.Fprintf(&b, "%v,", sip)
 		} else {
-			fmt.Fprintf(&b, "%v %v,", sip, si.Time)
+			_, _ = fmt.Fprintf(&b, "%v %v,", sip, si.Time)
 		}
 	}
-	fmt.Fprintf(&b, "], ")
+	_, _ = fmt.Fprintf(&b, "], ")
 
-	fmt.Fprintf(&b, "%v, %v", sr.ReportReason, sr.RefBundle)
+	_, _ = fmt.Fprintf(&b, "%v, %v", sr.ReportReason, sr.RefBundle)
 
 	return b.String()
 }

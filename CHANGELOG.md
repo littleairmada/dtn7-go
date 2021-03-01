@@ -1,6 +1,6 @@
 <!--
-SPDX-FileCopyrightText: 2020 Alvar Penning
-SPDX-FileCopyrightText: 2020 Markus Sommer
+SPDX-FileCopyrightText: 2020, 2021 Markus Sommer
+SPDX-FileCopyrightText: 2020, 2021 Alvar Penning
 
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
@@ -26,15 +26,38 @@ Types of changes:
 -->
 
 ## [Unreleased]
+### Added
+- Connect Administrative Records with Bundle and BundleBuilder.
+- Make PingAgent configurable as a dtnd Agent.
+- Simple "dtn-tool ping" command to interact with a PingAgent.
+- Reassembly support for fragmented Bundles in the Store.
+
 ### Changed
-- Move all Go packages into the pkg directory.
-- Renamed bundle package to bpv7. This new name better describes that it
-  is about bpbis and not just bundles. Furthermore this allows to use
-  the obvious variable name "bundle".
-- Unlink discovery from Core.
+- Structural refactoring:
+    - Move all Go packages into the pkg directory.
+    - Renamed bundle package to bpv7.
+      This new name better describes that it is about bpbis and not just
+      bundles. Furthermore, this allows to use the obvious variable name
+      "bundle" for a bpv7.Bundle.
+    - Unlink discovery from Core.
+    - Move custom routing-extension block to the bpv7 package,
+      where they shall reside with their brethren.
+- Bump draft-ietf-dtn-bpbis version from 26 to 31.
+    - Restrict dtn URI node name to `[\w-._]+`, _ietf-dtn-bpbis-27_.
+    - "Block unintelligible" status report is replaced by new "Block
+      unsupported" status report code for non processable blocks.
+- Bump draft-ietf-dtn-tcpclv4 version from 21 to 23.
+- Set Linux-specific socket options for a MTCP Client's connection to
+  detect an abrupt connection loss.
 
 ### Fixed
 - Include nil-check for EndpointID's internal representation.
+- Close a MTCP Client after sending a keepalive failed.
+- Enable parsing of primary blocks without a CRC value. When creating,
+  an attempt is made to enforce a CRC, since this is necessary in the
+  absence of an integrity block (BPSec).
+- Exclude the peer discovery Manager's function field from the
+  JSONFormatter used by logrus. Otherwise, the struct cannot be encoded.
 
 
 ## [0.9.0] - 2020-10-08

@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2019, 2020 Alvar Penning
+SPDX-FileCopyrightText: 2019, 2020, 2021 Alvar Penning
 SPDX-FileCopyrightText: 2020 Jonas Höchst
 SPDX-FileCopyrightText: 2020 Matthias Axel Kröll
 
@@ -18,12 +18,12 @@ Delay-Tolerant Networking software suite and library based on the Bundle Protoco
 ## Protocols
 This software implements the current draft of the Bundle Protocol Version 7.
 
-- Bundle Protocol Version 7 ([draft-ietf-dtn-bpbis-26][dtn-bpbis-26])
+- Bundle Protocol Version 7 ([draft-ietf-dtn-bpbis-31][dtn-bpbis-31])
 
 ### Convergence Layer
 Bundles might be exchanged between nodes by the following protocols.
 
-- TCP Convergence Layer Protocol Version 4 ([draft-ietf-dtn-tcpclv4-21][dtn-tcpcl-21]), including:
+- TCP Convergence Layer Protocol Version 4 ([draft-ietf-dtn-tcpclv4-23][dtn-tcpcl-23]), including:
     - WebSocket-based variant
 - Minimal TCP Convergence-Layer Protocol ([draft-ietf-dtn-mtcpcl-01][dtn-mtcpcl-01])
 - Bundle Broadcasting Connector, a generic Broadcasting Interface
@@ -91,7 +91,7 @@ To exchange bundles, `dtn-tool` might _watch_ a directory and send all new bundl
 In the same way, incoming bundles from `dtnd` are stored in this directory.
 
 ```
-Usage of ./dtn-tool create|show|exchange:
+Usage of ./dtn-tool create|exchange|ping|show:
 
 ./dtn-tool create sender receiver -|filename [-|filename]
   Creates a new Bundle, addressed from sender to receiver with the stdin (-)
@@ -100,14 +100,16 @@ Usage of ./dtn-tool create|show|exchange:
   Otherwise, the Bundle can be written to the stdout (-) or saved
   according to a freely selectable filename.
 
-./dtn-tool show -|filename
-  Prints a JSON version of a Bundle, read from stdin (-) or filename.
-
 ./dtn-tool exchange websocket endpoint-id directory
   ./dtn-tool registeres itself as an agent on the given websocket and writes
   incoming Bundles in the directory. If the user dropps a new Bundle in the
   directory, it will be sent to the server.
 
+./dtn-tool ping websocket sender receiver
+  Send continuously bundles from sender to receiver over a websocket.
+
+./dtn-tool show -|filename
+  Prints a JSON version of a Bundle, read from stdin (-) or filename.
 ```
 
 
@@ -151,9 +153,9 @@ To simplify the copyright stuff, the [REUSE][reuse] tool is used.
 [aur-dtn7]: https://aur.archlinux.org/packages/dtn7/
 [brew-dtn7]: https://github.com/jonashoechst/homebrew-hoechst/blob/master/dtn7.rb
 [brew]: https://brew.sh
-[dtn-bpbis-26]: https://tools.ietf.org/html/draft-ietf-dtn-bpbis-26
+[dtn-bpbis-31]: https://tools.ietf.org/html/draft-ietf-dtn-bpbis-31
 [dtn-mtcpcl-01]: https://tools.ietf.org/html/draft-ietf-dtn-mtcpcl-01
-[dtn-tcpcl-21]: https://tools.ietf.org/html/draft-ietf-dtn-tcpclv4-21
+[dtn-tcpcl-23]: https://tools.ietf.org/html/draft-ietf-dtn-tcpclv4-23
 [dtnd-configuration]: https://github.com/dtn7/dtn7-go/blob/master/cmd/dtnd/configuration.toml
 [godoc]: https://godoc.org/github.com/dtn7/dtn7-go
 [gofmt]: https://blog.golang.org/gofmt
