@@ -20,7 +20,7 @@ import (
 
 // RestAgent is a RESTful Application Agent for simple bundle dispatching.
 //
-// A client must register itself for some endpoint ID at first. After that, bundles sent to this endpoint can be
+// A client must register itself for some endpoint iD at first. After that, bundles sent to this endpoint can be
 // retrieved or new bundles can be sent. For sending, bundles can be created by calling the BundleBuilder. Finally,
 // a client should unregister itself.
 //

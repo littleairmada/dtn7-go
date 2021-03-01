@@ -109,7 +109,7 @@ func parseListen(conv convergenceConf, nodeId bpv7.EndpointID) (cla.Convergable,
 			return nil, nodeId, 0, discovery.Announcement{}, err
 		} else {
 			log.WithFields(log.Fields{
-				"listener ID": conv.Node,
+				"listener iD": conv.Node,
 			}).Debug("Using alternative configured endpoint id for listener")
 			nodeId = parsedId
 		}

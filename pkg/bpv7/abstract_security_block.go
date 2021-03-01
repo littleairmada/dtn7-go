@@ -16,8 +16,8 @@ import (
 
 // IDValueTuple is the Tuple described in BPSec 3.6 and used in SecurityContextParameters and securityResult.
 type IDValueTuple struct {
-	ID    uint64
-	value string
+	iD    uint64
+	value []byte
 }
 
 // MarshalCbor writes this IDValueTuple's CBOR representation.
@@ -26,11 +26,11 @@ func (idvt *IDValueTuple) MarshalCbor(w io.Writer) error {
 		return err
 	}
 
-	if err := cboring.WriteUInt(idvt.ID, w); err != nil {
+	if err := cboring.WriteUInt(idvt.iD, w); err != nil {
 		return err
 	}
 
-	if err := cboring.WriteTextString(idvt.value, w); err != nil {
+	if err := cboring.WriteByteString(idvt.value, w); err != nil {
 		return err
 	}
 
@@ -48,10 +48,10 @@ func (idvt *IDValueTuple) UnmarshalCbor(r io.Reader) error {
 	if id, err := cboring.ReadUInt(r); err != nil {
 		return err
 	} else {
-		idvt.ID = id
+		idvt.iD = id
 	}
 
-	if value, err := cboring.ReadTextString(r); err != nil {
+	if value, err := cboring.ReadByteString(r); err != nil {
 		idvt.value = value
 	}
 

@@ -46,7 +46,7 @@ func (c *Core) sendBundleAttachSignature(bndl *bpv7.Bundle) {
 }
 
 // transmit starts the transmission of an outbounding bundle pack. Therefore
-// the source's endpoint ID must be dtn:none or a member of this node.
+// the source's endpoint iD must be dtn:none or a member of this node.
 func (c *Core) transmit(bp BundleDescriptor) {
 	log.WithFields(log.Fields{
 		"bundle": bp.ID(),
@@ -80,7 +80,7 @@ func (c *Core) receive(bp BundleDescriptor) {
 	if len(bp.Constraints) > 0 {
 		log.WithFields(log.Fields{
 			"bundle": bp.ID(),
-		}).Debug("Received bundle's ID is already known.")
+		}).Debug("Received bundle's iD is already known.")
 
 		// bundleDeletion is _not_ called because this would delete the already
 		// stored BundleDescriptor.

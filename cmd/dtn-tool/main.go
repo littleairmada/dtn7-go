@@ -16,7 +16,7 @@ func printUsage() {
 	_, _ = fmt.Fprintf(os.Stderr, "%s create sender receiver -|filename [-|filename]\n", os.Args[0])
 	_, _ = fmt.Fprintf(os.Stderr, "  Creates a new Bundle, addressed from sender to receiver with the stdin (-)\n")
 	_, _ = fmt.Fprintf(os.Stderr, "  or the given file (filename) as payload. If no further specified, the\n")
-	_, _ = fmt.Fprintf(os.Stderr, "  Bundle is stored locally named after the hex representation of its ID.\n")
+	_, _ = fmt.Fprintf(os.Stderr, "  Bundle is stored locally named after the hex representation of its iD.\n")
 	_, _ = fmt.Fprintf(os.Stderr, "  Otherwise, the Bundle can be written to the stdout (-) or saved\n")
 	_, _ = fmt.Fprintf(os.Stderr, "  according to a freely selectable filename.\n\n")
 

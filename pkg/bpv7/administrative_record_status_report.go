@@ -125,7 +125,7 @@ const (
 	// DepletedStorage is the "Depleted storage" bundle status report reason code.
 	DepletedStorage StatusReportReason = 4
 
-	// DestEndpointUnintelligible is the "Destination endpoint ID unintelligible"
+	// DestEndpointUnintelligible is the "Destination endpoint iD unintelligible"
 	// bundle status report reason code.
 	DestEndpointUnintelligible StatusReportReason = 5
 
@@ -174,7 +174,7 @@ func (srr StatusReportReason) String() string {
 		return "Depleted storage"
 
 	case DestEndpointUnintelligible:
-		return "Destination endpoint ID unintelligible"
+		return "Destination endpoint iD unintelligible"
 
 	case NoRouteToDestination:
 		return "No known route to destination from here"
