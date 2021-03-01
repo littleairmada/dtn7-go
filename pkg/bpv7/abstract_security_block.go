@@ -103,7 +103,7 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 		tsr.securityTarget = st
 	}
 
-	for i := 0; i < int(arrayLength); i++ {
+	for i := uint64(0); i < arrayLength; i++ {
 		idvt := IDValueTuple{}
 		if err := cboring.Unmarshal(&idvt, r); err != nil {
 			return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
@@ -119,9 +119,6 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 const (
 	// SecurityContextParametersPresentFlag is the bit which is set if the AbstractSecurityBlock has SecurityContextParameters.
 	SecurityContextParametersPresentFlag = 0b01
-
-	// SecuritySourcePresentFlag is the bit which is set if the AbstractSecurityBlock has a SecuritySource.
-	SecuritySourcePresentFlag = 0b10
 )
 
 // AbstractSecurityBlock implements the Abstract Security Block (ASB) data structure described in BPSEC 3.6.
@@ -136,31 +133,18 @@ type AbstractSecurityBlock struct {
 
 // HasSecurityContextParametersPresentContextFlag interpreters the securityContextFlags for the presence of the
 // SecurityContextParametersPresentField as required by BPSec 3.6.
-// Does not check the real presence of a security source field, use CheckValid for this.
 func (asb *AbstractSecurityBlock) HasSecurityContextParametersPresentContextFlag() bool {
 	return asb.securityContextFlags&SecurityContextParametersPresentFlag != 0
-}
-
-// HasSecuritySourceContextFlag interpreters the securityContextFlags for the presence of the securitySourceField
-// as required by BPSec 3.6.
-// Does not check the real presence of a security context parameter field, use CheckValid for this.
-func (asb *AbstractSecurityBlock) HasSecuritySourceContextFlag() bool {
-	return asb.securityContextFlags&SecuritySourcePresentFlag != 0
 }
 
 // MarshalCbor writes this AbstractSecurityBlock's CBOR representation.
 func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 
 	// Determine block length depending on security context flags.
-	var blockLen uint64 = 4
+	var blockLen uint64 = 5
 
 	hasSecurityContextParameterContextFlag := asb.HasSecurityContextParametersPresentContextFlag()
 	if hasSecurityContextParameterContextFlag {
-		blockLen++
-	}
-
-	hasSecuritySourceContextFlag := asb.HasSecuritySourceContextFlag()
-	if hasSecuritySourceContextFlag {
 		blockLen++
 	}
 
@@ -191,10 +175,8 @@ func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 	}
 
 	// SecuritySource
-	if hasSecuritySourceContextFlag {
-		if err := asb.securitySource.MarshalCbor(w); err != nil {
-			return err
-		}
+	if err := asb.securitySource.MarshalCbor(w); err != nil {
+		return err
 	}
 
 	// SecurityContextParameters
@@ -268,12 +250,14 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 
 	// SecurityContextParameters (Optional)
 	// Check if SecurityContextFlag is set
-	if asb.securityContextFlags&1 == 1 {
-		for {
+	if asb.HasSecurityContextParametersPresentContextFlag() {
+		arrayLength, err := cboring.ReadArrayLength(r)
+		if err != nil {
+			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
+		}
+		for i := uint64(0); i < arrayLength; i++ {
 			idvt := IDValueTuple{}
-			if err := cboring.Unmarshal(&idvt, r); err == cboring.FlagBreakCode {
-				break
-			} else if err != nil {
+			if err := cboring.Unmarshal(&idvt, r); err != nil {
 				return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
 			} else {
 				asb.SecurityContextParameters = append(asb.SecurityContextParameters, idvt)
@@ -282,11 +266,13 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 	}
 
 	// SecurityResults
-	for {
+	arrayLength, err := cboring.ReadArrayLength(r)
+	if err != nil {
+		return fmt.Errorf("SecurityBlock failed to unmarshal SecurityResults : %v", err)
+	}
+	for i := uint64(0); i < arrayLength; i++ {
 		tsr := TargetSecurityResults{}
-		if err := cboring.Unmarshal(&tsr, r); err == cboring.FlagBreakCode {
-			break
-		} else if err != nil {
+		if err := cboring.Unmarshal(&tsr, r); err != nil {
 			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityResults : %v", err)
 		} else {
 			asb.securityResults = append(asb.securityResults, tsr)
@@ -347,20 +333,6 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 				"ordering of Security Targets and associated Security Results does not match"))
 		}
 
-	}
-
-	// If SecurityContextFlags are set, the associated security block field MUST be present and vice versa.
-	if asb.HasSecuritySourceContextFlag() {
-		if err := asb.securitySource.CheckValid(); err != nil {
-			errs = multierror.Append(errs, errors.New(
-				"security block has the Security Source Present Context Flag (0x02) set, but no valid Security Source Field is present"))
-			errs = multierror.Append(errs, err)
-		}
-	} else {
-		if err := asb.securitySource.CheckValid(); err == nil {
-			errs = multierror.Append(errs, errors.New(
-				"security block has the Security Source Present Context Flag (0x02) not set, but a valid Security Source Field is present"))
-		}
 	}
 
 	if asb.HasSecurityContextParametersPresentContextFlag() {
