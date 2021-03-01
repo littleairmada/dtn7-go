@@ -266,6 +266,7 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 	if err := cboring.Unmarshal(&asb.securitySource, r); err != nil {
 		return err
 	}
+
 	// SecurityContextParameters
 	for {
 		idvt := IDValueTuple{}
