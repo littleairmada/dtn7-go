@@ -52,6 +52,8 @@ func (idvt *IDValueTuple) UnmarshalCbor(r io.Reader) error {
 	}
 
 	if value, err := cboring.ReadByteString(r); err != nil {
+		return err
+	} else {
 		idvt.value = value
 	}
 
@@ -66,16 +68,17 @@ type TargetSecurityResults struct {
 
 // MarshalCbor creates this TargetSecurityResults's CBOR representation.
 func (tsr *TargetSecurityResults) MarshalCbor(w io.Writer) error {
-	// Minimum length of 1 for the Security Target Block Number.
-	var cborArrayLen uint64 = 1
-	resultCount := uint64(len(tsr.results))
-	cborArrayLen += resultCount
-
-	if err := cboring.WriteArrayLength(cborArrayLen, w); err != nil {
+	if err := cboring.WriteArrayLength(2, w); err != nil {
 		return err
 	}
 
 	if err := cboring.WriteUInt(tsr.securityTarget, w); err != nil {
+		return err
+	}
+
+	resultCount := uint64(len(tsr.results))
+
+	if err := cboring.WriteArrayLength(resultCount, w); err != nil {
 		return err
 	}
 
@@ -101,6 +104,11 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 		return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
 	} else {
 		tsr.securityTarget = st
+	}
+
+	arrayLength, err = cboring.ReadArrayLength(r)
+	if err != nil {
+		return err
 	}
 
 	for i := uint64(0); i < arrayLength; i++ {
@@ -332,7 +340,6 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 			errs = multierror.Append(errs, errors.New(
 				"ordering of Security Targets and associated Security Results does not match"))
 		}
-
 	}
 
 	if asb.HasSecurityContextParametersPresentContextFlag() {
@@ -346,6 +353,11 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 			errs = multierror.Append(errs, errors.New(
 				"security block has the Security Context Parameters Present Context Flag (0x01) not set, but the Security Parameter Context Field is present"))
 		}
+	}
+
+	// CheckValid EndpointID
+	if err := asb.securitySource.CheckValid(); err != nil {
+		errs = multierror.Append(errs, err)
 	}
 
 	return errs
