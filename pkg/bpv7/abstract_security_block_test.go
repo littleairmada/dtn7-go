@@ -7,11 +7,70 @@ package bpv7
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"reflect"
 	"testing"
 
 	"github.com/dtn7/cboring"
 )
+
+type DummyIDValueTuple struct {
+	typeCode uint64
+	id       uint64
+	value    []byte
+}
+
+func (dummyIDVT DummyIDValueTuple) TypeCode() uint64 {
+	return dummyIDVT.typeCode
+}
+func (dummyIDVT DummyIDValueTuple) ID() uint64 {
+	return dummyIDVT.id
+}
+
+func (dummyIDVT DummyIDValueTuple) Value() interface{} {
+	return dummyIDVT.value
+}
+
+func (dummyIDVT *DummyIDValueTuple) MarshalCbor(w io.Writer) error {
+	if err := cboring.WriteArrayLength(2, w); err != nil {
+		return err
+	}
+
+	if err := cboring.WriteUInt(dummyIDVT.id, w); err != nil {
+		return err
+	}
+
+	if err := cboring.WriteByteString(dummyIDVT.value, w); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (dummyIDVT *DummyIDValueTuple) UnmarshalCbor(r io.Reader) error {
+	if l, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else if l != 2 {
+		return fmt.Errorf("wrong array length: %d instead of 2", l)
+	}
+
+	if id, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		dummyIDVT.id = id
+	}
+
+	if value, err := cboring.ReadByteString(r); err != nil {
+		return err
+	} else {
+		dummyIDVT.value = value
+	}
+
+	return nil
+}
+
+var _ IDValueTuple = &DummyIDValueTuple{}
 
 func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 	ep, _ := NewEndpointID("dtn://test/")
@@ -34,14 +93,14 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{{
 				securityTarget: 0,
-				results: []IDValueTuple{{
-					iD:    0,
+				results: []IDValueTuple{&DummyIDValueTuple{
+					id:    0,
 					value: []byte{0, 0, 0, 0, 0},
 				}},
 			}},
@@ -52,16 +111,16 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextFlags: 0x1,
 			securitySource:       ep,
 			SecurityContextParameters: []IDValueTuple{
-				{
-					iD:    0,
+				&DummyIDValueTuple{
+					id:    0,
 					value: []byte{0, 0, 0, 0, 0},
 				},
-				{
-					iD:    1,
+				&DummyIDValueTuple{
+					id:    1,
 					value: []byte{0, 0, 0, 0, 0},
 				},
-				{
-					iD:    2,
+				&DummyIDValueTuple{
+					id:    3,
 					value: []byte{0, 0, 0, 0, 0},
 				},
 			},
@@ -69,12 +128,12 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 				{
 					securityTarget: 0,
 					results: []IDValueTuple{
-						{
-							iD:    0,
+						&DummyIDValueTuple{
+							id:    0,
 							value: []byte{0, 0, 0, 0, 0},
 						},
-						{
-							iD:    1,
+						&DummyIDValueTuple{
+							id:    1,
 							value: []byte{0, 0, 0, 0, 0},
 						},
 					},
@@ -82,12 +141,12 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 				{
 					securityTarget: 1,
 					results: []IDValueTuple{
-						{
-							iD:    0,
+						&DummyIDValueTuple{
+							id:    0,
 							value: []byte{0, 0, 0, 0, 0},
 						},
-						{
-							iD:    1,
+						&DummyIDValueTuple{
+							id:    1,
 							value: []byte{0, 0, 0, 0, 0},
 						},
 					},
@@ -95,12 +154,12 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 				{
 					securityTarget: 2,
 					results: []IDValueTuple{
-						{
-							iD:    0,
+						&DummyIDValueTuple{
+							id:    0,
 							value: []byte{0, 0, 0, 0, 0},
 						},
-						{
-							iD:    1,
+						&DummyIDValueTuple{
+							id:    1,
 							value: []byte{0, 0, 0, 0, 0},
 						},
 					},
@@ -112,14 +171,14 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{{
 				securityTarget: 0,
-				results: []IDValueTuple{{
-					iD:    0,
+				results: []IDValueTuple{&DummyIDValueTuple{
+					id:    0,
 					value: []byte{0, 0, 0, 0, 0},
 				}},
 			}},
@@ -129,23 +188,23 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
@@ -157,23 +216,23 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 1,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
@@ -185,31 +244,31 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 2,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 1,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
@@ -221,23 +280,23 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityContextID:    0,
 			securityContextFlags: 0x0,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 1,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
@@ -253,16 +312,16 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 			securityResults: []TargetSecurityResults{
 				{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
 				},
 				{
 					securityTarget: 1,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{0, 0, 0, 0, 0},
 					},
 					},
@@ -307,14 +366,14 @@ func TestAbstractSecurityBlock_HasSecurityContextParametersPresentContextFlag(t 
 			securityContextID:    0,
 			securityContextFlags: 0x1,
 			securitySource:       ep,
-			SecurityContextParameters: []IDValueTuple{{
-				iD:    0,
+			SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+				id:    0,
 				value: []byte{0, 0, 0, 0, 0},
 			}},
 			securityResults: []TargetSecurityResults{{
 				securityTarget: 0,
-				results: []IDValueTuple{{
-					iD:    0,
+				results: []IDValueTuple{&DummyIDValueTuple{
+					id:    0,
 					value: []byte{0, 0, 0, 0, 0},
 				}},
 			}},
@@ -327,8 +386,8 @@ func TestAbstractSecurityBlock_HasSecurityContextParametersPresentContextFlag(t 
 			SecurityContextParameters: []IDValueTuple{},
 			securityResults: []TargetSecurityResults{{
 				securityTarget: 0,
-				results: []IDValueTuple{{
-					iD:    0,
+				results: []IDValueTuple{&DummyIDValueTuple{
+					id:    0,
 					value: []byte{0, 0, 0, 0, 0},
 				}},
 			}},
@@ -353,14 +412,14 @@ func TestAbstractSecurityBlock_HasSecurityContextParametersPresentContextFlag(t 
 
 func TestIDValueTupleCbor(t *testing.T) {
 	tests := []struct {
-		idVT1 IDValueTuple
+		idVT1 DummyIDValueTuple
 	}{
-		{IDValueTuple{
-			iD:    1,
+		{DummyIDValueTuple{
+			id:    1,
 			value: []byte{37, 35, 92, 90, 54},
 		}},
-		{IDValueTuple{
-			iD:    1,
+		{DummyIDValueTuple{
+			id:    1,
 			value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 		}},
 	}
@@ -370,12 +429,14 @@ func TestIDValueTupleCbor(t *testing.T) {
 		if err := cboring.Marshal(&test.idVT1, buff); err != nil {
 			t.Fatal(err)
 		}
+		println(buff)
 
-		var idVT2 IDValueTuple
+		idVT2 := DummyIDValueTuple{}
 		if err := cboring.Unmarshal(&idVT2, buff); err != nil {
 			t.Fatalf("CBOR decoding failed: %v", err)
 		}
 
+		println(idVT2.id)
 		if !reflect.DeepEqual(test.idVT1, idVT2) {
 			t.Fatalf("ID Value Tuples differ:\n%v\n%v", test.idVT1, idVT2)
 		}
@@ -389,12 +450,12 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 		{TargetSecurityResults{
 			securityTarget: 1,
 			results: []IDValueTuple{
-				{
-					iD:    0,
+				&DummyIDValueTuple{
+					id:    0,
 					value: []byte{37, 35, 92, 90, 54},
 				},
-				{
-					iD:    1,
+				&DummyIDValueTuple{
+					id:    1,
 					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
 			},
@@ -402,16 +463,16 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 		{TargetSecurityResults{
 			securityTarget: 3,
 			results: []IDValueTuple{
-				{
-					iD:    0,
+				&DummyIDValueTuple{
+					id:    0,
 					value: []byte{37, 35, 92, 90, 54},
 				},
-				{
-					iD:    1,
+				&DummyIDValueTuple{
+					id:    1,
 					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
-				{
-					iD:    2,
+				&DummyIDValueTuple{
+					id:    2,
 					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
 			},
@@ -424,7 +485,9 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var tsr2 TargetSecurityResults
+		print(buff.String())
+		tsr2 := TargetSecurityResults{}
+
 		if err := cboring.Unmarshal(&tsr2, buff); err != nil {
 			t.Fatalf("CBOR decoding failed: %v", err)
 		}
@@ -446,14 +509,14 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 				securityContextID:    0,
 				securityContextFlags: 0x1,
 				securitySource:       ep,
-				SecurityContextParameters: []IDValueTuple{{
-					iD:    0,
+				SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
+					id:    0,
 					value: []byte{37, 35, 92, 90, 54},
 				}},
 				securityResults: []TargetSecurityResults{{
 					securityTarget: 0,
-					results: []IDValueTuple{{
-						iD:    0,
+					results: []IDValueTuple{&DummyIDValueTuple{
+						id:    0,
 						value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 					}},
 				}},
@@ -470,12 +533,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 0,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 						},
@@ -483,12 +546,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 1,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{0, 0, 0, 0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 						},
@@ -496,12 +559,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 2,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0, 0, 0},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0},
 							},
 						},
@@ -520,12 +583,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 0,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 						},
@@ -533,12 +596,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 1,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{0, 0, 0, 0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 						},
@@ -546,12 +609,12 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 					{
 						securityTarget: 2,
 						results: []IDValueTuple{
-							{
-								iD:    0,
+							&DummyIDValueTuple{
+								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0, 0, 0},
 							},
-							{
-								iD:    1,
+							&DummyIDValueTuple{
+								id:    1,
 								value: []byte{0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0},
 							},
 						},
@@ -567,7 +630,7 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var abs2 AbstractSecurityBlock
+		abs2 := AbstractSecurityBlock{}
 		if err := cboring.Unmarshal(&abs2, buff); err != nil {
 			t.Fatalf("CBOR decoding failed: %v", err)
 		}

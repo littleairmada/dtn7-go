@@ -68,18 +68,3 @@ func (sc *BibIopHmacSha2) SecurityContextIdentifier() uint64 {
 func (sc *BibIopHmacSha2) SecurityContextName() string {
 	return SecConNameBIBIOPHMACSHA
 }
-
-func NewBibIopHmacSha2WithParameters(scParameters bibIopHmacSha2Parameters) (sc *BibIopHmacSha2, err error) {
-
-	newBibIopHmacSha2 := BibIopHmacSha2{
-		SecurityParameters: []IDValueTuple{},
-	}
-
-	if scParameters.ShaVariant != nil {
-		append(newBibIopHmacSha2.SecurityParameters, IDValueTuple{
-			iD:    1,
-			value: *scParameters.ShaVariant,
-		})
-	}
-
-}

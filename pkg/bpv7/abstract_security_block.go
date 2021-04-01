@@ -14,77 +14,34 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+// Todo: TypeCodes
 // IDValueTuple is the Tuple described in BPSec 3.6 and used in SecurityContextParameters and securityResult.
-type IDValueTuple struct {
-	iD    uint64
-	value []byte
-}
-
-// MarshalCbor writes this IDValueTuple's CBOR representation.
-func (idvt *IDValueTuple) MarshalCbor(w io.Writer) error {
-	if err := cboring.WriteArrayLength(2, w); err != nil {
-		return err
-	}
-
-	if err := cboring.WriteUInt(idvt.iD, w); err != nil {
-		return err
-	}
-
-	if err := cboring.WriteByteString(idvt.value, w); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// UnmarshalCbor creates this IDValueTuples's based on a CBOR representation.
-func (idvt *IDValueTuple) UnmarshalCbor(r io.Reader) error {
-	if n, err := cboring.ReadArrayLength(r); err != nil {
-		return err
-	} else if n != 2 {
-		return fmt.Errorf("SecurityBlock: IDValueTuple has %d instead of 2 elements", n)
-	}
-
-	if id, err := cboring.ReadUInt(r); err != nil {
-		return err
-	} else {
-		idvt.iD = id
-	}
-
-	if value, err := cboring.ReadByteString(r); err != nil {
-		return err
-	} else {
-		idvt.value = value
-	}
-
-	return nil
+type IDValueTuple interface {
+	TypeCode() uint64
+	ID() uint64
+	Value() interface{}
+	cboring.CborMarshaler
 }
 
 // TargetSecurityResults implements the security results array described in BPSEC 3.6.
 type TargetSecurityResults struct {
-	securityTarget uint64
+	securityTarget uint64 // The SecurityTargets BlockNumber.
 	results        []IDValueTuple
 }
 
 // MarshalCbor creates this TargetSecurityResults's CBOR representation.
 func (tsr *TargetSecurityResults) MarshalCbor(w io.Writer) error {
 	if err := cboring.WriteArrayLength(2, w); err != nil {
-		return err
+		return fmt.Errorf("TargetSecurityResults MarshalCbor failed: %v", err)
 	}
 
 	if err := cboring.WriteUInt(tsr.securityTarget, w); err != nil {
-		return err
+		return fmt.Errorf("TargetSecurityResults MarshalCbor failed: %v", err)
 	}
 
-	resultCount := uint64(len(tsr.results))
-
-	if err := cboring.WriteArrayLength(resultCount, w); err != nil {
-		return err
-	}
-
-	for _, result := range tsr.results {
-		if err := result.MarshalCbor(w); err != nil {
-			return err
+	for i := 0; i < len(tsr.results); i++ {
+		if err := cboring.Marshal(tsr.results[i], w); err != nil {
+			return fmt.Errorf("CanonicalBlock failed: %v", err)
 		}
 	}
 
@@ -112,11 +69,22 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 	}
 
 	for i := uint64(0); i < arrayLength; i++ {
-		idvt := IDValueTuple{}
-		if err := cboring.Unmarshal(&idvt, r); err != nil {
+		arrayLength, err := cboring.ReadArrayLength(r)
+		if err != nil {
+			return err
+		} else {
+			majorType, len, err := cboring.ReadMajors(r)
+
+			switch majorType {
+
+			}
+
+		}
+		var idvt = new(IDValueTuple)
+		if err := cboring.Unmarshal(*idvt, r); err != nil {
 			return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
 		} else {
-			tsr.results = append(tsr.results, idvt)
+			tsr.results = append(tsr.results, *idvt)
 		}
 	}
 
@@ -264,8 +232,8 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
 		}
 		for i := uint64(0); i < arrayLength; i++ {
-			idvt := IDValueTuple{}
-			if err := cboring.Unmarshal(&idvt, r); err != nil {
+			var idvt IDValueTuple
+			if err := cboring.Unmarshal(idvt, r); err != nil {
 				return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
 			} else {
 				asb.SecurityContextParameters = append(asb.SecurityContextParameters, idvt)
