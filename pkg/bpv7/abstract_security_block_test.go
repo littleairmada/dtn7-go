@@ -7,68 +7,11 @@ package bpv7
 
 import (
 	"bytes"
-	"fmt"
-	"io"
 	"reflect"
 	"testing"
 
 	"github.com/dtn7/cboring"
 )
-
-type DummyIDValueTuple struct {
-	typeCode uint64
-	id       uint64
-	value    []byte
-}
-
-func (dummyIDVT DummyIDValueTuple) TypeCode() uint64 {
-	return dummyIDVT.typeCode
-}
-func (dummyIDVT DummyIDValueTuple) ID() uint64 {
-	return dummyIDVT.id
-}
-
-func (dummyIDVT DummyIDValueTuple) Value() interface{} {
-	return dummyIDVT.value
-}
-
-func (dummyIDVT *DummyIDValueTuple) MarshalCbor(w io.Writer) error {
-	if err := cboring.WriteArrayLength(2, w); err != nil {
-		return err
-	}
-
-	if err := cboring.WriteUInt(dummyIDVT.id, w); err != nil {
-		return err
-	}
-
-	if err := cboring.WriteByteString(dummyIDVT.value, w); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (dummyIDVT *DummyIDValueTuple) UnmarshalCbor(r io.Reader) error {
-	if l, err := cboring.ReadArrayLength(r); err != nil {
-		return err
-	} else if l != 2 {
-		return fmt.Errorf("wrong array length: %d instead of 2", l)
-	}
-
-	if id, err := cboring.ReadUInt(r); err != nil {
-		return err
-	} else {
-		dummyIDVT.id = id
-	}
-
-	if value, err := cboring.ReadByteString(r); err != nil {
-		return err
-	} else {
-		dummyIDVT.value = value
-	}
-
-	return nil
-}
 
 var _ IDValueTuple = &DummyIDValueTuple{}
 
@@ -451,12 +394,14 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 			securityTarget: 1,
 			results: []IDValueTuple{
 				&DummyIDValueTuple{
-					id:    0,
-					value: []byte{37, 35, 92, 90, 54},
+					typeCode: DummyIDVT,
+					id:       0,
+					value:    []byte{37, 35, 92, 90, 54},
 				},
 				&DummyIDValueTuple{
-					id:    1,
-					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
+					typeCode: DummyIDVT,
+					id:       1,
+					value:    []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
 			},
 		}},
@@ -464,16 +409,19 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 			securityTarget: 3,
 			results: []IDValueTuple{
 				&DummyIDValueTuple{
-					id:    0,
-					value: []byte{37, 35, 92, 90, 54},
+					typeCode: DummyIDVT,
+					id:       0,
+					value:    []byte{37, 35, 92, 90, 54},
 				},
 				&DummyIDValueTuple{
-					id:    1,
-					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
+					typeCode: DummyIDVT,
+					id:       1,
+					value:    []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
 				&DummyIDValueTuple{
-					id:    2,
-					value: []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
+					typeCode: DummyIDVT,
+					id:       2,
+					value:    []byte{0x1b, 0x00, 0x00, 0x00, 0xe8, 0xd4, 0xa5, 0x10, 0x00},
 				},
 			},
 		}},
@@ -485,7 +433,6 @@ func TestTargetSecurityResultsCbor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		print(buff.String())
 		tsr2 := TargetSecurityResults{}
 
 		if err := cboring.Unmarshal(&tsr2, buff); err != nil {
@@ -510,14 +457,16 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 				securityContextFlags: 0x1,
 				securitySource:       ep,
 				SecurityContextParameters: []IDValueTuple{&DummyIDValueTuple{
-					id:    0,
-					value: []byte{37, 35, 92, 90, 54},
+					typeCode: DummyIDVT,
+					id:       0,
+					value:    []byte{37, 35, 92, 90, 54},
 				}},
 				securityResults: []TargetSecurityResults{{
 					securityTarget: 0,
 					results: []IDValueTuple{&DummyIDValueTuple{
-						id:    0,
-						value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
+						typeCode: DummyIDVT,
+						id:       0,
+						value:    []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 					}},
 				}},
 			},
@@ -534,12 +483,14 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 						securityTarget: 0,
 						results: []IDValueTuple{
 							&DummyIDValueTuple{
-								id:    0,
-								value: []byte{37, 35, 92, 90, 54},
+								typeCode: DummyIDVT,
+								id:       0,
+								value:    []byte{37, 35, 92, 90, 54},
 							},
 							&DummyIDValueTuple{
-								id:    1,
-								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
+								typeCode: DummyIDVT,
+								id:       1,
+								value:    []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 						},
 					},
@@ -547,10 +498,14 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 						securityTarget: 1,
 						results: []IDValueTuple{
 							&DummyIDValueTuple{
+								typeCode: DummyIDVT,
+
 								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
 							&DummyIDValueTuple{
+								typeCode: DummyIDVT,
+
 								id:    1,
 								value: []byte{0, 0, 0, 0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
 							},
@@ -560,10 +515,14 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 						securityTarget: 2,
 						results: []IDValueTuple{
 							&DummyIDValueTuple{
+								typeCode: DummyIDVT,
+
 								id:    0,
 								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0, 0, 0},
 							},
 							&DummyIDValueTuple{
+								typeCode: DummyIDVT,
+
 								id:    1,
 								value: []byte{0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0},
 							},
@@ -572,56 +531,64 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 				},
 			},
 		},
-		{
-			AbstractSecurityBlock{
-				securityTargets:           []uint64{0, 1, 2},
-				securityContextID:         0,
-				securityContextFlags:      0x0,
-				securitySource:            ep,
-				SecurityContextParameters: []IDValueTuple{},
-				securityResults: []TargetSecurityResults{
-					{
-						securityTarget: 0,
-						results: []IDValueTuple{
-							&DummyIDValueTuple{
-								id:    0,
-								value: []byte{37, 35, 92, 90, 54},
-							},
-							&DummyIDValueTuple{
-								id:    1,
-								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
-							},
-						},
-					},
-					{
-						securityTarget: 1,
-						results: []IDValueTuple{
-							&DummyIDValueTuple{
-								id:    0,
-								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
-							},
-							&DummyIDValueTuple{
-								id:    1,
-								value: []byte{0, 0, 0, 0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
-							},
-						},
-					},
-					{
-						securityTarget: 2,
-						results: []IDValueTuple{
-							&DummyIDValueTuple{
-								id:    0,
-								value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0, 0, 0},
-							},
-							&DummyIDValueTuple{
-								id:    1,
-								value: []byte{0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0},
-							},
-						},
-					},
-				},
-			},
-		},
+		//{
+		//	AbstractSecurityBlock{
+		//		securityTargets:           []uint64{0, 1, 2},
+		//		securityContextID:         0,
+		//		securityContextFlags:      0x0,
+		//		securitySource:            ep,
+		//		SecurityContextParameters: []IDValueTuple{},
+		//		securityResults: []TargetSecurityResults{
+		//			{
+		//				securityTarget: 0,
+		//				results: []IDValueTuple{
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//						id:    0,
+		//						value: []byte{37, 35, 92, 90, 54},
+		//					},
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//						id:    1,
+		//						value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
+		//					},
+		//				},
+		//			},
+		//			{
+		//				securityTarget: 1,
+		//				results: []IDValueTuple{
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//
+		//						id:    0,
+		//						value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
+		//					},
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//						id:       1,
+		//						value:    []byte{0, 0, 0, 0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54},
+		//					},
+		//				},
+		//			},
+		//			{
+		//				securityTarget: 2,
+		//				results: []IDValueTuple{
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//
+		//						id:    0,
+		//						value: []byte{37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0, 0, 0},
+		//					},
+		//					&DummyIDValueTuple{
+		//						typeCode: DummyIDVT,
+		//						id:       1,
+		//						value:    []byte{0, 0, 37, 35, 92, 90, 54, 37, 35, 92, 90, 54, 0, 0, 0},
+		//					},
+		//				},
+		//			},
+		//		},
+		//	},
+		//},
 	}
 
 	for _, test := range tests {
