@@ -16,126 +16,112 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
-// Todo: TypeCodes
-// IDValueTuple is the Tuple described in BPSec 3.6 and used in SecurityContextParameters and securityResult.
 type IDValueTuple interface {
-	TypeCode() uint64
 	ID() uint64
 	Value() interface{}
 	cboring.CborMarshaler
 }
 
-const (
-	DummyIDVT uint64 = 666
-)
-
-func unmarshalCborIDVTArray(r io.Reader, idvtArray *[]IDValueTuple) (rr io.Reader, err error) {
-	arrayLengthResults, err := cboring.ReadArrayLength(r)
-	if err != nil {
-		return nil, err
-	}
-
-	bufferedReader := bufio.NewReader(r)
-
-	for i := uint64(0); i < arrayLengthResults; i++ {
-		peekForTypCode, _ := bufferedReader.Peek(bufferedReader.Size())
-		peekReader := bytes.NewReader(peekForTypCode)
-
-		_, err := cboring.ReadArrayLength(peekReader)
-		if err != nil {
-			return nil, err
-		}
-
-		idvtTypeCode, _ := cboring.ReadUInt(peekReader)
-
-		var idvt IDValueTuple
-
-		switch idvtTypeCode {
-		case DummyIDVT:
-			idvt = &DummyIDValueTuple{}
-
-		default:
-			return nil, fmt.Errorf("no matching IDValueTupleType found for TypeCode %d", idvtTypeCode)
-		}
-
-		if err := cboring.Unmarshal(idvt, bufferedReader); err != nil {
-			return nil, fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
-		} else {
-			*idvtArray = append(*idvtArray, idvt)
-		}
-	}
-
-	restOfBufferedReader, _ := io.ReadAll(bufferedReader)
-
-	rr = bytes.NewReader(restOfBufferedReader)
-
-	return rr, nil
+type IDValueTupleByteString struct {
+	id    uint64
+	value []byte
 }
 
-type DummyIDValueTuple struct {
-	typeCode uint64
-	id       uint64
-	value    []byte
-}
-
-func (dummyIDVT DummyIDValueTuple) TypeCode() uint64 {
-	return dummyIDVT.typeCode
-}
-
-func (dummyIDVT DummyIDValueTuple) ID() uint64 {
-	return dummyIDVT.id
-}
-
-func (dummyIDVT DummyIDValueTuple) Value() interface{} {
-	return dummyIDVT.value
-}
-
-func (dummyIDVT *DummyIDValueTuple) MarshalCbor(w io.Writer) error {
-	if err := cboring.WriteArrayLength(3, w); err != nil {
+func (idvtbs *IDValueTupleByteString) MarshalCbor(w io.Writer) error {
+	if err := cboring.WriteArrayLength(2, w); err != nil {
 		return err
 	}
 
-	if err := cboring.WriteUInt(dummyIDVT.typeCode, w); err != nil {
+	if err := cboring.WriteUInt(idvtbs.id, w); err != nil {
 		return err
 	}
 
-	if err := cboring.WriteUInt(dummyIDVT.id, w); err != nil {
-		return err
-	}
-
-	if err := cboring.WriteByteString(dummyIDVT.value, w); err != nil {
+	if err := cboring.WriteByteString(idvtbs.value, w); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (dummyIDVT *DummyIDValueTuple) UnmarshalCbor(r io.Reader) error {
+func (idvtbs *IDValueTupleByteString) UnmarshalCbor(r io.Reader) error {
 	if l, err := cboring.ReadArrayLength(r); err != nil {
 		return err
-	} else if l != 3 {
-		return fmt.Errorf("wrong array length: %d instead of 3", l)
-	}
-
-	if typeCode, err := cboring.ReadUInt(r); err != nil {
-		return err
-	} else {
-		dummyIDVT.typeCode = typeCode
+	} else if l != 2 {
+		return fmt.Errorf("wrong array length: %d instead of 2", l)
 	}
 
 	if id, err := cboring.ReadUInt(r); err != nil {
 		return err
 	} else {
-		dummyIDVT.id = id
+		idvtbs.id = id
 	}
 
-	if value, err := cboring.ReadByteString(r); err != nil {
+	if result, err := cboring.ReadByteString(r); err != nil {
 		return err
 	} else {
-		dummyIDVT.value = value
+		idvtbs.value = result
 	}
 
 	return nil
+}
+
+func (idvtbs IDValueTupleByteString) ID() uint64 {
+	return idvtbs.id
+}
+
+func (idvtbs IDValueTupleByteString) Value() interface{} {
+	return idvtbs.value
+}
+
+type IDValueTupleUInt64 struct {
+	id    uint64
+	value uint64
+}
+
+func (idvtuint64 *IDValueTupleUInt64) MarshalCbor(w io.Writer) error {
+	if err := cboring.WriteArrayLength(2, w); err != nil {
+		return err
+	}
+
+	if err := cboring.WriteUInt(idvtuint64.id, w); err != nil {
+		return err
+	}
+
+	if err := cboring.WriteUInt(idvtuint64.value, w); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (idvtuint64 *IDValueTupleUInt64) UnmarshalCbor(r io.Reader) error {
+	if l, err := cboring.ReadArrayLength(r); err != nil {
+		return err
+	} else if l != 2 {
+		return fmt.Errorf("wrong array length: %d instead of 3", l)
+	}
+
+	if id, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		idvtuint64.id = id
+	}
+
+	if result, err := cboring.ReadUInt(r); err != nil {
+		return err
+	} else {
+		idvtuint64.value = result
+	}
+
+	return nil
+}
+
+func (idvtuint64 IDValueTupleUInt64) ID() uint64 {
+	return idvtuint64.id
+}
+
+func (idvtuint64 IDValueTupleUInt64) Value() interface{} {
+	return idvtuint64.value
 }
 
 // TargetSecurityResults implements the security results array described in BPSEC 3.6.
@@ -181,35 +167,20 @@ func (tsr *TargetSecurityResults) UnmarshalCbor(r io.Reader) error {
 		tsr.securityTarget = st
 	}
 
-	_, err = unmarshalCborIDVTArray(r, &tsr.results)
-	if err != nil {
-		return err
+	if resultCount, err := cboring.ReadArrayLength(r); err != nil {
+		return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
+	} else {
+
+		for i := uint64(0); i < resultCount; i++ {
+			result := IDValueTupleByteString{}
+			if err := cboring.Unmarshal(&result, r); err != nil {
+				return fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
+			}
+			tsr.results = append(tsr.results, &result)
+		}
 	}
 
 	return nil
-}
-
-// UnmarshalCborReturn creates this TargetSecurityResult based on a CBOR representation and returns the reader.
-func (tsr *TargetSecurityResults) UnmarshalCborReturnReader(r io.Reader) (rr io.Reader, err error) {
-	arrayLength, err := cboring.ReadArrayLength(r)
-	if err != nil {
-		return nil, err
-	} else if arrayLength != 2 {
-		return nil, fmt.Errorf("SecurityBlock: TargetSecurityResults has %d elements, instead of 2", arrayLength)
-	}
-
-	if st, err := cboring.ReadUInt(r); err != nil {
-		return nil, fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
-	} else {
-		tsr.securityTarget = st
-	}
-
-	rr, err = unmarshalCborIDVTArray(r, &tsr.results)
-	if err != nil {
-		return nil, err
-	}
-
-	return rr, nil
 }
 
 // Sorted list of Security Context Flags.
@@ -347,9 +318,11 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 
 	// SecurityContextParameters (Optional)
 	// Check if SecurityContextFlag is set
+	// SecurityContextParameters
+	// Check if SecurityContextFlag is set
 	if asb.HasSecurityContextParametersPresentContextFlag() {
 		var err error
-		r, err = unmarshalCborIDVTArray(r, &asb.SecurityContextParameters)
+		r, err = asb.UnmarshalCborSecurityParameters(r)
 		if err != nil {
 			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityContextParameters : %v", err)
 		}
@@ -360,12 +333,9 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("SecurityBlock failed to unmarshal SecurityResults : %v", err)
 	}
-
 	for i := uint64(0); i < arrayLength; i++ {
 		tsr := TargetSecurityResults{}
-		var err error
-		r, err = tsr.UnmarshalCborReturnReader(r)
-		if err != nil {
+		if err := cboring.Unmarshal(&tsr, r); err != nil {
 			return fmt.Errorf("SecurityBlock failed to unmarshal SecurityResults : %v", err)
 		} else {
 			asb.securityResults = append(asb.securityResults, tsr)
@@ -446,4 +416,42 @@ func (asb *AbstractSecurityBlock) CheckValid() (errs error) {
 	}
 
 	return errs
+}
+
+func (asb *AbstractSecurityBlock) UnmarshalCborSecurityParameters(r io.Reader) (rr io.Reader, err error) {
+	arrayLengthParameters, err := cboring.ReadArrayLength(r)
+	if err != nil {
+		return nil, err
+	} else if arrayLengthParameters > 3 {
+		return nil, fmt.Errorf("wrong array length: %d instead of max 3", arrayLengthParameters)
+	}
+
+	bufferedReader := bufio.NewReader(r)
+
+	for i := uint64(0); i < arrayLengthParameters; i++ {
+		peekForID, _ := bufferedReader.Peek(bufferedReader.Size())
+		peekReader := bytes.NewReader(peekForID)
+
+		_, err := cboring.ReadArrayLength(peekReader)
+		if err != nil {
+			return nil, err
+		}
+
+		securityParameterID, _ := cboring.ReadUInt(peekReader)
+
+		securityParameter := SecParIdentToIDValueTupleType[securityParameterID]
+
+		if err := cboring.Unmarshal(securityParameter, bufferedReader); err != nil {
+			return nil, fmt.Errorf("TargetSecurityResults UnmarshalCbor failed: %v", err)
+		} else {
+			asb.SecurityContextParameters = append(asb.SecurityContextParameters, securityParameter)
+		}
+	}
+
+	restOfBufferedReader, _ := io.ReadAll(bufferedReader)
+
+	rr = bytes.NewReader(restOfBufferedReader)
+
+	return rr, nil
+
 }
