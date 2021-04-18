@@ -22,7 +22,7 @@ const (
 	// ExtBlockTypePayloadBlock is the block type code for a Payload Block, bpv7/extension_block_payload.go
 	ExtBlockTypePayloadBlock uint64 = 1
 
-	// ExtBlockTypeBlockIntegrityBlock is the block type code for a Integrity Block, bpv7/extension_block_block_integrity.go
+	// ExtBlockTypeBlockIntegrityBlock is the block type code for a Integrity Block, bpv7/extension_block_bib_iop_hmac_sha2.go
 	ExtBlockTypeBlockIntegrityBlock uint64 = 3
 
 	// ExtBlockTypeBlockConfidentialityBlock is the block type code for a Confidentiality Block, bpv7/extension_block_block_confidentiality.go
