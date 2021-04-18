@@ -32,8 +32,8 @@ func (bib *BIBIOPHMACSHA2) MarshalCbor(w io.Writer) error {
 }
 
 // UnmarshalCbor writes a CBOR representation for a Bundle Integrity Block
-func (bib *BIBIOPHMACSHA2) UnmarshalCbor(w io.Writer) error {
-	return bib.UnmarshalCbor(w)
+func (bib *BIBIOPHMACSHA2) UnmarshalCbor(r io.Reader) error {
+	return bib.asb.UnmarshalCbor(r)
 }
 
 // CheckValid returns an array of errors for incorrect data.
@@ -82,6 +82,7 @@ func (bib *BIBIOPHMACSHA2) PrepareIPPT(b Bundle, securityTargetBlockNumber uint6
 					for _, block := range b.CanonicalBlocks {
 						if block.BlockNumber == securityTargetBlockNumber {
 
+							return nil, nil
 						}
 					}
 				}
