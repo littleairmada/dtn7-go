@@ -273,12 +273,12 @@ func TestAbstractSecurityBlock_CheckValid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			asb := &AbstractSecurityBlock{
-				securityTargets:           tt.fields.securityTargets,
-				securityContextID:         tt.fields.securityContextID,
-				securityContextFlags:      tt.fields.securityContextFlags,
-				securitySource:            tt.fields.securitySource,
-				SecurityContextParameters: tt.fields.SecurityContextParameters,
-				securityResults:           tt.fields.securityResults,
+				securityTargets:                      tt.fields.securityTargets,
+				securityContextID:                    tt.fields.securityContextID,
+				securityContextParametersPresentFlag: tt.fields.securityContextFlags,
+				securitySource:                       tt.fields.securitySource,
+				SecurityContextParameters:            tt.fields.SecurityContextParameters,
+				securityResults:                      tt.fields.securityResults,
 			}
 			if err := asb.CheckValid(); (err != nil) != tt.wantErr {
 				t.Errorf("CheckValid() error = %v, wantErr %v", err, tt.wantErr)
@@ -337,12 +337,12 @@ func TestAbstractSecurityBlock_HasSecurityContextParametersPresentContextFlag(t 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			asb := &AbstractSecurityBlock{
-				securityTargets:           tt.fields.securityTargets,
-				securityContextID:         tt.fields.securityContextID,
-				securityContextFlags:      tt.fields.securityContextFlags,
-				securitySource:            tt.fields.securitySource,
-				SecurityContextParameters: tt.fields.SecurityContextParameters,
-				securityResults:           tt.fields.securityResults,
+				securityTargets:                      tt.fields.securityTargets,
+				securityContextID:                    tt.fields.securityContextID,
+				securityContextParametersPresentFlag: tt.fields.securityContextFlags,
+				securitySource:                       tt.fields.securitySource,
+				SecurityContextParameters:            tt.fields.SecurityContextParameters,
+				securityResults:                      tt.fields.securityResults,
 			}
 			if got := asb.HasSecurityContextParametersPresentContextFlag(); got != tt.want {
 				t.Errorf("HasSecurityContextParametersPresentContextFlag() = %v, want %v", got, tt.want)
@@ -415,13 +415,13 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 	}{
 		{
 			AbstractSecurityBlock{
-				securityTargets:      []uint64{0},
-				securityContextID:    SecConIdentBIBIOPHMACSHA,
-				securityContextFlags: 0x1,
-				securitySource:       ep,
+				securityTargets:                      []uint64{0},
+				securityContextID:                    SecConIdentBIBIOPHMACSHA,
+				securityContextParametersPresentFlag: 0x1,
+				securitySource:                       ep,
 				SecurityContextParameters: []IDValueTuple{&IDValueTupleByteString{
 
-					id:    SecParIdentBIBIOPHMACSHA2EncapsulatedKey,
+					id:    SecParIdentBIBIOPHMACSHA2WrappedKey,
 					value: []byte{37, 35, 92, 90, 54},
 				}},
 				securityResults: []TargetSecurityResults{{
@@ -436,11 +436,11 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 		},
 		{
 			AbstractSecurityBlock{
-				securityTargets:           []uint64{0, 1, 2},
-				securityContextID:         0,
-				securityContextFlags:      0x0,
-				securitySource:            ep,
-				SecurityContextParameters: nil,
+				securityTargets:                      []uint64{0, 1, 2},
+				securityContextID:                    0,
+				securityContextParametersPresentFlag: 0x0,
+				securitySource:                       ep,
+				SecurityContextParameters:            nil,
 				securityResults: []TargetSecurityResults{
 					{
 						securityTarget: 0,
@@ -494,7 +494,7 @@ func TestAbstractSecurityBlockCbor(t *testing.T) {
 		//	AbstractSecurityBlock{
 		//		securityTargets:           []uint64{0, 1, 2},
 		//		securityContextID:         0,
-		//		securityContextFlags:      0x0,
+		//		securityContextParametersPresentFlag:      0x0,
 		//		securitySource:            ep,
 		//		SecurityContextParameters: []IDValueTuple{},
 		//		securityResults: []TargetSecurityResults{

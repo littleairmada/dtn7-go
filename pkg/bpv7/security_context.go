@@ -38,37 +38,10 @@ type SecurityContext struct {
 
 var SecParIdentToIDValueTupleType = map[uint64]IDValueTuple{
 	SecParIdentBIBIOPHMACSHA2ShaVariant:          new(IDValueTupleUInt64),
-	SecParIdentBIBIOPHMACSHA2EncapsulatedKey:     new(IDValueTupleByteString),
+	SecParIdentBIBIOPHMACSHA2WrappedKey:          new(IDValueTupleByteString),
 	SecParIdentBIBIOPHMACSHA2IntegrityScopeFlags: new(IDValueTupleUInt64),
 }
 
-// BIB-HMAC-SHA2 Security Parameters
-const (
-	SecParIdentBIBIOPHMACSHA2ShaVariant uint64 = 1
-
-	SecParIdentBIBIOPHMACSHA2EncapsulatedKey uint64 = 2
-
-	SecParIdentBIBIOPHMACSHA2IntegrityScopeFlags uint64 = 3
-)
-
-//  BIB-IOP-HMAC-SHA2 ResultID
-const SecConResultIDBIBIOPHMACSHA2ExpectedHMAC uint64 = 1
-
-// SHA Variant Parameter Values for BIB-IOP-HMAC-SHA2.
-const (
-	HMAC256SHA256 uint64 = 5 // Default
-	HMAC384SHA384 uint64 = 6
-	HMAC512SHA512 uint64 = 7
-)
-
-// IntegrityScopeFlags are used to show how broadly how broadly the concept of integrity is being applied, e.g.
-// what to include in the IPPT draft-ietf-dtn-bpsec-interop-sc-02#section-3.2
-// Default 0x7
-const (
-	PrimaryBlockFlag   uint16 = 0b001
-	TargetHeaderFlag   uint16 = 0b010
-	SecurityHeaderFlag uint16 = 0b100
-)
 
 // BibIopHmacShaParameters BIB-HMAC-SHA2 can be parameterized to select SHA-2 variants,
 //  communicate key information, and define the scope of the IPPT. draft-ietf-dtn-bpsec-interop-sc-02#section-3.3 .
@@ -97,7 +70,7 @@ func NewBIPIOPHMACSHA2(securityContextParameters BIBIOPHMACSHA2Parameters) Secur
 	bipiophmacsha2.SecurityContextParameters = append(bipiophmacsha2.SecurityContextParameters, &shaVariant)
 
 	encapsulatedKey := IDValueTupleByteString{
-		id: SecParIdentBIBIOPHMACSHA2EncapsulatedKey,
+		id: SecParIdentBIBIOPHMACSHA2WrappedKey,
 	}
 	if securityContextParameters.EncapsulatedKey != nil {
 		encapsulatedKey.value = *securityContextParameters.EncapsulatedKey

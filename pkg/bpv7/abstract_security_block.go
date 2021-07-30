@@ -191,18 +191,18 @@ const (
 
 // AbstractSecurityBlock implements the Abstract Security Block (ASB) data structure described in BPSEC 3.6.
 type AbstractSecurityBlock struct {
-	securityTargets           []uint64
-	securityContextID         uint64
-	securityContextFlags      uint64
-	securitySource            EndpointID
-	SecurityContextParameters []IDValueTuple
-	securityResults           []TargetSecurityResults
+	securityTargets                      []uint64
+	securityContextID                    uint64
+	securityContextParametersPresentFlag uint64
+	securitySource                       EndpointID
+	SecurityContextParameters            []IDValueTuple
+	securityResults                      []TargetSecurityResults
 }
 
-// HasSecurityContextParametersPresentContextFlag interpreters the securityContextFlags for the presence of the
+// HasSecurityContextParametersPresentContextFlag interpreters the securityContextParametersPresentFlag for the presence of the
 // SecurityContextParametersPresentField as required by BPSec 3.6.
 func (asb *AbstractSecurityBlock) HasSecurityContextParametersPresentContextFlag() bool {
-	return asb.securityContextFlags&SecurityContextParametersPresentFlag != 0
+	return asb.securityContextParametersPresentFlag&SecurityContextParametersPresentFlag != 0
 }
 
 // MarshalCbor writes this AbstractSecurityBlock's CBOR representation.
@@ -238,7 +238,7 @@ func (asb *AbstractSecurityBlock) MarshalCbor(w io.Writer) error {
 	}
 
 	// SecurityContextFlags
-	if err := cboring.WriteUInt(asb.securityContextFlags, w); err != nil {
+	if err := cboring.WriteUInt(asb.securityContextParametersPresentFlag, w); err != nil {
 		return err
 	}
 
@@ -308,7 +308,7 @@ func (asb *AbstractSecurityBlock) UnmarshalCbor(r io.Reader) error {
 	if scf, err := cboring.ReadUInt(r); err != nil {
 		return err
 	} else {
-		asb.securityContextFlags = scf
+		asb.securityContextParametersPresentFlag = scf
 	}
 
 	// SecuritySource
