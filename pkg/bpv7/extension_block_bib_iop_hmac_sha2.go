@@ -6,8 +6,14 @@
 package bpv7
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"crypto/sha512"
+	"hash"
+
 	"io"
 
+	"crypto/hmac"
 	"github.com/dtn7/cboring"
 )
 
@@ -39,9 +45,10 @@ const (
 // what to include in the IPPT draft-ietf-dtn-bpsec-interop-sc-02#section-3.2
 // Default 0x7
 const (
-	PrimaryBlockFlag   uint16 = 0b001
-	TargetHeaderFlag   uint16 = 0b010
-	SecurityHeaderFlag uint16 = 0b100
+	DefaultIntegrityScopeFlags uint16 = 0b111
+	PrimaryBlockFlag           uint16 = 0b001
+	TargetHeaderFlag           uint16 = 0b010
+	SecurityHeaderFlag         uint16 = 0b100
 )
 
 // BlockCodeType BlockTypeCode must return a constant integer, indicating the block type code.
@@ -106,21 +113,30 @@ func NewBIBIOPHMACSHA2(shaVariant *uint64, wrappedKey *[]byte, integrityScopeFla
 		})
 	}
 
+	var securityResults []TargetSecurityResults
+
+	for _, target := range securityTargets {
+		securityResults = append(securityResults, TargetSecurityResults{
+			securityTarget: target,
+			results:        []IDValueTuple{},
+		})
+	}
+
 	return &BIBIOPHMACSHA2{asb: AbstractSecurityBlock{
 		securityTargets:                      securityTargets,
 		securityContextID:                    SecConIdentBIBIOPHMACSHA,
 		securityContextParametersPresentFlag: securityContextParametersPresentFlag,
 		securitySource:                       securitySource,
 		SecurityContextParameters:            securityContextParameters,
-		securityResults:                      []TargetSecurityResults{},
+		securityResults:                      securityResults,
 	}}
 
 }
 
 // prepareIPPT constructs the "Integrity Protected Plain Text" using the process defined in bpsec-default-sc-11 3.7.
-func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint64, bibBlockNumber uint64) (ippt io.Writer, err error) {
+func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint64, bibBlockNumber uint64) (ippt *bytes.Buffer, err error) {
 	// Default Value for IntegrityScopeFlag, used if the optional security parameter is not present.
-	integrityScopeFlag := uint16(7)
+	integrityScopeFlag := DefaultIntegrityScopeFlags
 
 	securityTargetBlock, err := b.GetExtensionBlockByBlockNumber(securityTargetBlockNumber)
 	if err != nil {
@@ -172,7 +188,6 @@ func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint6
 	// then the canonical form of the block type code, block number,
 	// and block processing control flags associated with the  BIB MUST be calculated and,
 	// in that order, appended to the IPPT.
-
 	if integrityScopeFlag&SecurityHeaderFlag == SecurityHeaderFlag {
 
 		if err = cboring.WriteUInt(bib.BlockCodeType(), ippt); err != nil {
@@ -205,4 +220,53 @@ func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint6
 	}
 
 	return ippt, nil
+}
+
+func (bib *BIBIOPHMACSHA2) signTargets(b Bundle, bibBlockNumber uint64, privateKey []byte) (err error) {
+
+	shaVariantParameter := func() *uint64 {
+		for _, scp := range bib.asb.SecurityContextParameters {
+			if scp.ID() == SecParIdentBIBIOPHMACSHA2ShaVariant {
+				return scp.Value().(*uint64)
+			}
+		}
+		return nil
+	}()
+
+	var shaVariant func() hash.Hash
+
+	switch *shaVariantParameter {
+	case HMAC384SHA384:
+		shaVariant = sha512.New384
+		break
+
+	case HMAC512SHA512:
+		shaVariant = sha512.New
+		break
+	default:
+		// Use default is shaVariantParameter is not present e.g. nil or set to HMAC256SHA256
+		shaVariant = sha256.New
+	}
+
+	h := hmac.New(shaVariant, privateKey)
+
+	for i, securityTargetBlockNumber := range bib.asb.securityTargets {
+		ippt, err := bib.prepareIPPT(b, securityTargetBlockNumber, bibBlockNumber)
+		if err != nil {
+			return err
+		}
+
+		h.Write(ippt.Bytes())
+
+		targetSecurityResultValue := h.Sum(nil)
+
+		h.Reset()
+
+		bib.asb.securityResults[i].results = append(bib.asb.securityResults[i].results, &IDValueTupleByteString{
+			id:    SecConResultIDBIBIOPHMACSHA2ExpectedHMAC,
+			value: targetSecurityResultValue,
+		})
+	}
+
+	return err
 }
