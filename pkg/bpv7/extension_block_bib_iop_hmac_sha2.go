@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/subtle"
+	"fmt"
 	"hash"
 
 	"io"
@@ -51,8 +53,8 @@ const (
 	SecurityHeaderFlag         uint16 = 0b100
 )
 
-// BlockCodeType BlockTypeCode must return a constant integer, indicating the block type code.
-func (bib *BIBIOPHMACSHA2) BlockCodeType() uint64 {
+// BlockTypeCode BlockTypeCode must return a constant integer, indicating the block type code.
+func (bib *BIBIOPHMACSHA2) BlockTypeCode() uint64 {
 	return ExtBlockTypeBlockIntegrityBlock
 }
 
@@ -135,6 +137,8 @@ func NewBIBIOPHMACSHA2(shaVariant *uint64, wrappedKey *[]byte, integrityScopeFla
 
 // prepareIPPT constructs the "Integrity Protected Plain Text" using the process defined in bpsec-default-sc-11 3.7.
 func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint64, bibBlockNumber uint64) (ippt *bytes.Buffer, err error) {
+	ippt = &bytes.Buffer{}
+
 	// Default Value for IntegrityScopeFlag, used if the optional security parameter is not present.
 	integrityScopeFlag := DefaultIntegrityScopeFlags
 
@@ -190,7 +194,7 @@ func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint6
 	// in that order, appended to the IPPT.
 	if integrityScopeFlag&SecurityHeaderFlag == SecurityHeaderFlag {
 
-		if err = cboring.WriteUInt(bib.BlockCodeType(), ippt); err != nil {
+		if err = cboring.WriteUInt(bib.BlockTypeCode(), ippt); err != nil {
 			return nil, err
 		}
 		if err = cboring.WriteUInt(bibBlockNumber, ippt); err != nil {
@@ -198,7 +202,7 @@ func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint6
 		}
 
 		var bibCanonicalBlock *CanonicalBlock
-		bibCanonicalBlock, err = b.ExtensionBlock(bib.BlockCodeType())
+		bibCanonicalBlock, err = b.ExtensionBlock(bib.BlockTypeCode())
 		if err != nil {
 			return nil, err
 		}
@@ -222,12 +226,13 @@ func (bib *BIBIOPHMACSHA2) prepareIPPT(b Bundle, securityTargetBlockNumber uint6
 	return ippt, nil
 }
 
-func (bib *BIBIOPHMACSHA2) signTargets(b Bundle, bibBlockNumber uint64, privateKey []byte) (err error) {
-
+// calculateSecurityResultValues computes the results of the BIP-IOP-HMAC-SHA2 security operation for all Security Targets of the BIP, depending on the SHAVariant SecurityContextParameter
+func (bib *BIBIOPHMACSHA2) calculateSecurityResultValues(b Bundle, bibBlockNumber uint64, privateKey []byte) (securityResults *[]*[]byte, err error) {
 	shaVariantParameter := func() *uint64 {
 		for _, scp := range bib.asb.SecurityContextParameters {
 			if scp.ID() == SecParIdentBIBIOPHMACSHA2ShaVariant {
-				return scp.Value().(*uint64)
+				scpValue := scp.Value().(uint64)
+				return &scpValue
 			}
 		}
 		return nil
@@ -250,23 +255,67 @@ func (bib *BIBIOPHMACSHA2) signTargets(b Bundle, bibBlockNumber uint64, privateK
 
 	h := hmac.New(shaVariant, privateKey)
 
-	for i, securityTargetBlockNumber := range bib.asb.securityTargets {
+	var results []*[]byte
+
+	for _, securityTargetBlockNumber := range bib.asb.securityTargets {
 		ippt, err := bib.prepareIPPT(b, securityTargetBlockNumber, bibBlockNumber)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		h.Write(ippt.Bytes())
 
-		targetSecurityResultValue := h.Sum(nil)
+		targetResult := h.Sum(nil)
+
+		results = append(results, &targetResult)
 
 		h.Reset()
 
+	}
+	return &results, nil
+}
+
+func (bib *BIBIOPHMACSHA2) SignTargets(b Bundle, bibBlockNumber uint64, privateKey []byte) (err error) {
+	securityResultValues, err := bib.calculateSecurityResultValues(b, bibBlockNumber, privateKey)
+	if err != nil {
+		return err
+	}
+
+	for i, resultValue := range *securityResultValues {
 		bib.asb.securityResults[i].results = append(bib.asb.securityResults[i].results, &IDValueTupleByteString{
 			id:    SecConResultIDBIBIOPHMACSHA2ExpectedHMAC,
-			value: targetSecurityResultValue,
+			value: *resultValue,
 		})
 	}
 
-	return err
+	return
+}
+
+func (bib *BIBIOPHMACSHA2) VerifyTargets(b Bundle, bibBlockNumber uint64, privateKey []byte) (err error) {
+	securityResultValues, err := bib.calculateSecurityResultValues(b, bibBlockNumber, privateKey)
+	if err != nil {
+		return err
+	}
+
+	for i, resultValue := range *securityResultValues {
+		var resultToVerify []byte
+
+		// Probably this is not necessary to check for the Result ID, because BIB-IOP-HMAC-SHA2 only has one specified Result ID.
+		// But it makes sense as a check.
+		for _, targetResults := range bib.asb.securityResults[i].results {
+			if targetResults.ID() == SecConResultIDBIBIOPHMACSHA2ExpectedHMAC {
+				resultToVerify = targetResults.Value().([]byte)
+			}
+		}
+
+		if resultToVerify == nil {
+			return fmt.Errorf("could not find SecurityResult with ResultID %d, for SecurityTarget with Blocknumber %d in BIB-IOP-HMAC-SHA2 with Blocknumber %d", SecConResultIDBIBIOPHMACSHA2ExpectedHMAC, bib.asb.securityTargets[i], bibBlockNumber)
+		}
+
+		if subtle.ConstantTimeCompare(*resultValue, resultToVerify) != 1 {
+			return fmt.Errorf("Could not verify HMAC for Securitytarget with Blocknumber %d in BIB-IOP-HMAC-SHA2 with Blocknumber %d, Found MAC: %X  Expected MAC: %X", bib.asb.securityTargets[i], bibBlockNumber, *resultValue, resultToVerify)
+		}
+
+	}
+	return
 }

@@ -199,6 +199,17 @@ type AbstractSecurityBlock struct {
 	securityResults                      []TargetSecurityResults
 }
 
+/*// GetSecurityContextParameterByID return the SecurityContextParameter with the given parameter ID or nil if no match is found.
+func (asb *AbstractSecurityBlock) GetSecurityContextParameterByID(parameterID uint64) (scpByID *IDValueTuple) {
+	for _, scp := range asb.SecurityContextParameters {
+		if scp.ID() == parameterID {
+			return &scp
+		}
+	}
+	return
+}
+*/
+
 // HasSecurityContextParametersPresentContextFlag interpreters the securityContextParametersPresentFlag for the presence of the
 // SecurityContextParametersPresentField as required by BPSec 3.6.
 func (asb *AbstractSecurityBlock) HasSecurityContextParametersPresentContextFlag() bool {
