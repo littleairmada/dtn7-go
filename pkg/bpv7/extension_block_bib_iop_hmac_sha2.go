@@ -16,6 +16,7 @@ import (
 	"io"
 
 	"crypto/hmac"
+
 	"github.com/dtn7/cboring"
 )
 
@@ -43,7 +44,7 @@ const (
 	HMAC512SHA512 uint64 = 7
 )
 
-// IntegrityScopeFlags are used to show how broadly how broadly the concept of integrity is being applied, e.g.
+// IntegrityScopeFlags are used to show how broadly  the concept of integrity is being applied, e.g.
 // what to include in the IPPT draft-ietf-dtn-bpsec-interop-sc-02#section-3.2
 // Default 0x7
 const (
@@ -115,13 +116,13 @@ func NewBIBIOPHMACSHA2(shaVariant *uint64, wrappedKey *[]byte, integrityScopeFla
 		})
 	}
 
-	var securityResults []TargetSecurityResults
+	securityResults := make([]TargetSecurityResults, len(securityTargets))
 
-	for _, target := range securityTargets {
-		securityResults = append(securityResults, TargetSecurityResults{
+	for i, target := range securityTargets {
+		securityResults[i] = TargetSecurityResults{
 			securityTarget: target,
 			results:        []IDValueTuple{},
-		})
+		}
 	}
 
 	return &BIBIOPHMACSHA2{asb: AbstractSecurityBlock{
@@ -243,11 +244,9 @@ func (bib *BIBIOPHMACSHA2) calculateSecurityResultValues(b Bundle, bibBlockNumbe
 	switch *shaVariantParameter {
 	case HMAC384SHA384:
 		shaVariant = sha512.New384
-		break
 
 	case HMAC512SHA512:
 		shaVariant = sha512.New
-		break
 	default:
 		// Use default is shaVariantParameter is not present e.g. nil or set to HMAC256SHA256
 		shaVariant = sha256.New
@@ -255,19 +254,22 @@ func (bib *BIBIOPHMACSHA2) calculateSecurityResultValues(b Bundle, bibBlockNumbe
 
 	h := hmac.New(shaVariant, privateKey)
 
-	var results []*[]byte
+	results := make([]*[]byte, len(bib.asb.securityTargets))
 
-	for _, securityTargetBlockNumber := range bib.asb.securityTargets {
+	for i, securityTargetBlockNumber := range bib.asb.securityTargets {
 		ippt, err := bib.prepareIPPT(b, securityTargetBlockNumber, bibBlockNumber)
 		if err != nil {
 			return nil, err
 		}
 
-		h.Write(ippt.Bytes())
+		_, err = h.Write(ippt.Bytes())
+		if err != nil {
+			return nil, err
+		}
 
 		targetResult := h.Sum(nil)
 
-		results = append(results, &targetResult)
+		results[i] = &targetResult
 
 		h.Reset()
 

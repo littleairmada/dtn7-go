@@ -16,6 +16,12 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+var SecParIdentToIDValueTupleType = map[uint64]IDValueTuple{
+	SecParIdentBIBIOPHMACSHA2ShaVariant:          new(IDValueTupleUInt64),
+	SecParIdentBIBIOPHMACSHA2WrappedKey:          new(IDValueTupleByteString),
+	SecParIdentBIBIOPHMACSHA2IntegrityScopeFlags: new(IDValueTupleUInt64),
+}
+
 type IDValueTuple interface {
 	ID() uint64
 	Value() interface{}

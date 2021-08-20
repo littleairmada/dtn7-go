@@ -1,11 +1,17 @@
+// SPDX-FileCopyrightText: 2020 Matthias Axel Kröll
+// SPDX-FileCopyrightText: 2020 Alvar Penning
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package bpv7
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/dtn7/cboring"
 	"testing"
 	"time"
+
+	"github.com/dtn7/cboring"
 )
 
 func TestBIBIOPHMACSHA2_VerifyTargets(t *testing.T) {
@@ -65,16 +71,9 @@ func TestBIBIOPHMACSHA2_VerifyTargets(t *testing.T) {
 
 	fmt.Printf("%X\n", buff)
 
+	err = bibBlockAdded.Value.(*BIBIOPHMACSHA2).VerifyTargets(b, bibBlockAdded.BlockNumber, []byte(privateKey))
+	if err != nil {
+		return
+	}
 
-	//if !bytes.Equal(pub, sb.PublicKey) {
-	//	t.Fatalf("SignatureBlock's public key %x differs from %x", sb.PublicKey, pub)
-	//}
-	//
-	//if err := sb.CheckValid(); err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//if !sb.Verify(b) {
-	//	t.Fatal("SignatureBlock cannot be verified")
-	//}
 }
